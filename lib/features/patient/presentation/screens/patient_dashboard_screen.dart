@@ -26,15 +26,11 @@ class PatientDashboardScreen extends ConsumerWidget {
               // Header
               DashboardHeader(
                 greeting: 'Hello,',
-                name: profile.valueOrNull?.fullName ?? 'Patient',
+                name: profile.valueOrNull?.fullName.isNotEmpty == true 
+                    ? profile.valueOrNull!.fullName 
+                    : 'Patient',
                 subtitle: 'Manage your health records',
                 roleColor: AppColors.patient,
-                onNotificationTap: () {
-                  // TODO: Notifications
-                },
-                onProfileTap: () {
-                  // TODO: Profile
-                },
               ),
               const SizedBox(height: 24),
 
@@ -151,12 +147,12 @@ class PatientDashboardScreen extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: QuickActionCard(
-                      icon: Icons.medication_outlined,
-                      title: 'Medications',
-                      subtitle: 'Current meds',
-                      color: AppColors.pharmacist,
+                      icon: Icons.add_circle_outline_rounded,
+                      title: 'Add Prescription',
+                      subtitle: 'Patient input',
+                      color: AppColors.accent,
                       onTap: () {
-                        context.push(RouteNames.patientPrescriptions);
+                        context.push(RouteNames.patientNewPrescription);
                       },
                     ),
                   ),

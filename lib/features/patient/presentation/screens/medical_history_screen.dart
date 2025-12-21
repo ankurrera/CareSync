@@ -4,33 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-
-final medicalConditionsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final supabase = Supabase.instance.client;
-  final userId = supabase.auth.currentUser?.id;
-  
-  if (userId == null) return [];
-  
-  // First get the patient id
-  final patientResult = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
-  
-  if (patientResult == null) return [];
-  
-  final patientId = patientResult['id'];
-  
-  // Then get medical conditions
-  final conditions = await supabase
-      .from('medical_conditions')
-      .select()
-      .eq('patient_id', patientId)
-      .order('created_at', ascending: false);
-  
-  return List<Map<String, dynamic>>.from(conditions);
-});
+import '../../models/patient_data.dart';
+import '../../providers/patient_provider.dart';
 
 class MedicalHistoryScreen extends ConsumerWidget {
   const MedicalHistoryScreen({super.key});
@@ -72,7 +47,7 @@ class MedicalHistoryScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: () => ref.refresh(medicalConditionsProvider),
+                  onPressed: () => ref.invalidate(medicalConditionsProvider),
                   child: const Text('Retry'),
                 ),
               ],
@@ -138,10 +113,10 @@ class MedicalHistoryScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildConditionCard(BuildContext context, Map<String, dynamic> condition, WidgetRef ref) {
-    final type = condition['condition_type'] as String;
-    final severity = condition['severity'] as String?;
-    final isPublic = condition['is_public'] as bool? ?? true;
+  Widget _buildConditionCard(BuildContext context, MedicalCondition condition, WidgetRef ref) {
+    final type = condition.conditionType;
+    final severity = condition.severity;
+    final isPublic = condition.isPublic;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -195,7 +170,7 @@ class MedicalHistoryScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              condition['description'] ?? '',
+              condition.description,
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -215,7 +190,7 @@ class MedicalHistoryScreen extends ConsumerWidget {
                 IconButton(
                   icon: const Icon(Icons.delete_outline, size: 20),
                   color: AppColors.error,
-                  onPressed: () => _deleteCondition(context, ref, condition['id']),
+                  onPressed: () => _deleteCondition(context, ref, condition.id),
                 ),
               ],
             ),
@@ -383,42 +358,19 @@ class MedicalHistoryScreen extends ConsumerWidget {
     bool isPublic,
   ) async {
     try {
-      final supabase = Supabase.instance.client;
-      final userId = supabase.auth.currentUser?.id;
-      
-      if (userId == null) return;
-      
-      // Get patient id
-      final patientResult = await supabase
-          .from('patients')
-          .select('id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      
-      if (patientResult == null) {
-        // Create patient record if it doesn't exist
-        final newPatient = await supabase
-            .from('patients')
-            .insert({'user_id': userId})
-            .select('id')
-            .single();
-        
-        await supabase.from('medical_conditions').insert({
-          'patient_id': newPatient['id'],
-          'condition_type': type,
-          'description': description,
-          'severity': severity,
-          'is_public': isPublic,
-        });
-      } else {
-        await supabase.from('medical_conditions').insert({
-          'patient_id': patientResult['id'],
-          'condition_type': type,
-          'description': description,
-          'severity': severity,
-          'is_public': isPublic,
-        });
+      // Get patient data from provider
+      final patientData = await ref.read(patientDataProvider.future);
+      if (patientData == null) {
+        throw Exception('Patient profile not found');
       }
+      
+      await Supabase.instance.client.from('medical_conditions').insert({
+        'patient_id': patientData.id,
+        'condition_type': type,
+        'description': description,
+        'severity': severity,
+        'is_public': isPublic,
+      });
       
       ref.invalidate(medicalConditionsProvider);
       

@@ -1,11 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../auth/providers/auth_provider.dart';
 import '../../../services/supabase_service.dart';
 import '../models/patient_data.dart';
 import '../models/prescription.dart';
 
-/// Provider for current patient data
+/// Provider for current patient data - tied to auth state for proper invalidation
 final patientDataProvider = FutureProvider<PatientData?>((ref) async {
+  // Watch auth state to invalidate when user changes
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return null;
+  
   final data = await SupabaseService.instance.getPatientData();
   if (data == null) return null;
   return PatientData.fromJson(data);

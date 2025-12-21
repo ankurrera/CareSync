@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -531,8 +532,14 @@ class EmergencyDataScreen extends ConsumerWidget {
           ),
           // Call button
           IconButton.filled(
-            onPressed: () {
-              // TODO: Launch phone call
+            onPressed: () async {
+              final phone = contact['phone'] as String?;
+              if (phone != null && phone.isNotEmpty) {
+                final uri = Uri.parse('tel:$phone');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+              }
             },
             icon: const Icon(Icons.phone_rounded),
             style: IconButton.styleFrom(

@@ -8,21 +8,28 @@ import '../features/auth/presentation/screens/sign_up_screen.dart';
 import '../features/auth/presentation/screens/biometric_enrollment_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/patient/presentation/screens/patient_dashboard_screen.dart';
+import '../features/patient/presentation/screens/patient_new_prescription_screen.dart';
 import '../features/patient/presentation/screens/prescriptions_screen.dart';
 import '../features/patient/presentation/screens/qr_code_screen.dart';
 import '../features/patient/presentation/screens/medical_history_screen.dart';
 import '../features/patient/presentation/screens/privacy_settings_screen.dart';
 import '../features/doctor/presentation/screens/doctor_dashboard_screen.dart';
 import '../features/doctor/presentation/screens/patient_lookup_screen.dart';
+import '../features/doctor/presentation/screens/prescription_history_screen.dart';
 import '../features/pharmacist/presentation/screens/pharmacist_dashboard_screen.dart';
+import '../features/pharmacist/presentation/screens/dispensing_history_screen.dart';
+import '../features/pharmacist/presentation/screens/dispense_screen.dart';
 import '../features/first_responder/presentation/screens/first_responder_dashboard_screen.dart';
 import '../features/first_responder/presentation/screens/qr_scanner_screen.dart';
 import '../features/first_responder/presentation/screens/emergency_data_screen.dart';
 import '../features/shared/presentation/screens/splash_screen.dart';
+import '../features/shared/presentation/screens/profile_screen.dart';
+import '../features/shared/presentation/screens/notifications_screen.dart';
 import 'route_names.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
+  final profile = ref.read(currentProfileProvider).valueOrNull;
 
   return GoRouter(
     initialLocation: RouteNames.splash,
@@ -48,6 +55,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Authenticated but on auth route - redirect to appropriate dashboard
       if (isAuthenticated && isAuthRoute) {
         return _getDashboardRoute(ref);
+      }
+
+      // Enforce role-specific paths
+      if (isAuthenticated && profile != null) {
+        final path = state.matchedLocation;
+        final expectedPrefix = _rolePrefix(profile.role);
+        final isCommonRoute = path == RouteNames.profile ||
+            path == RouteNames.notifications ||
+            path == RouteNames.biometricEnrollment;
+
+        if (!isCommonRoute &&
+            expectedPrefix != null &&
+            !path.startsWith(expectedPrefix)) {
+          return _getDashboardRoute(ref);
+        }
       }
 
       return null;
@@ -88,6 +110,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const BiometricEnrollmentScreen(),
       ),
 
+      // Common Routes
+      GoRoute(
+        path: RouteNames.profile,
+        name: 'profile',
+        builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.notifications,
+        name: 'notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+
       // Patient Routes
       GoRoute(
         path: RouteNames.patientDashboard,
@@ -98,6 +132,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.patientPrescriptions,
         name: 'patientPrescriptions',
         builder: (context, state) => const PrescriptionsScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.patientNewPrescription,
+        name: 'patientNewPrescription',
+        builder: (context, state) => const PatientNewPrescriptionScreen(),
       ),
       GoRoute(
         path: RouteNames.patientQrCode,
@@ -126,12 +165,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'doctorPatientLookup',
         builder: (context, state) => const PatientLookupScreen(),
       ),
+      GoRoute(
+        path: RouteNames.doctorHistory,
+        name: 'doctorHistory',
+        builder: (context, state) => const PrescriptionHistoryScreen(),
+      ),
 
       // Pharmacist Routes
       GoRoute(
         path: RouteNames.pharmacistDashboard,
         name: 'pharmacistDashboard',
         builder: (context, state) => const PharmacistDashboardScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.pharmacistDispense,
+        name: 'pharmacistDispense',
+        builder: (context, state) => const DispenseScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.pharmacistHistory,
+        name: 'pharmacistHistory',
+        builder: (context, state) => const DispensingHistoryScreen(),
       ),
 
       // First Responder Routes
@@ -181,6 +235,21 @@ String _getDashboardRoute(Ref ref) {
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(AsyncValue<dynamic> stream) {
     notifyListeners();
+  }
+}
+
+String? _rolePrefix(String role) {
+  switch (role) {
+    case 'doctor':
+      return '/doctor';
+    case 'pharmacist':
+      return '/pharmacist';
+    case 'first_responder':
+      return '/first-responder';
+    case 'patient':
+      return '/patient';
+    default:
+      return null;
   }
 }
 

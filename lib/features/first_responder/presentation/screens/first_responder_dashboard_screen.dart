@@ -25,11 +25,11 @@ class FirstResponderDashboardScreen extends ConsumerWidget {
               // Header
               DashboardHeader(
                 greeting: 'Ready to help,',
-                name: profile.valueOrNull?.fullName ?? 'First Responder',
+                name: profile.valueOrNull?.fullName.isNotEmpty == true 
+                    ? profile.valueOrNull!.fullName 
+                    : 'First Responder',
                 subtitle: 'Quick access to emergency data',
                 roleColor: AppColors.firstResponder,
-                onNotificationTap: () {},
-                onProfileTap: () {},
               ),
               const SizedBox(height: 32),
 

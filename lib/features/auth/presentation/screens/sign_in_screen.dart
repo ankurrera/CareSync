@@ -57,6 +57,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
+  IconData get _roleIcon {
+    switch (widget.role) {
+      case 'doctor':
+        return Icons.medical_services_rounded;
+      case 'pharmacist':
+        return Icons.local_pharmacy_rounded;
+      case 'first_responder':
+        return Icons.emergency_rounded;
+      default:
+        return Icons.person_rounded;
+    }
+  }
+
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -69,20 +82,43 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           );
 
       if (mounted) {
-        // Check if biometric is enabled, if not prompt for enrollment
-        final biometricEnabled = await ref.read(biometricEnabledProvider.future);
-        if (!biometricEnabled) {
-          context.go(RouteNames.biometricEnrollment);
-        } else {
-          _navigateToDashboard();
+        // Refresh profile to get actual role from database
+        ref.invalidate(currentProfileProvider);
+        final profile = await ref.read(currentProfileProvider.future);
+        
+        if (profile == null) {
+          throw Exception('Could not load profile');
+        }
+
+        // Validate role matches
+        if (profile.role != widget.role) {
+          // Sign out first
+          await ref.read(authNotifierProvider.notifier).signOut();
+          
+          if (mounted) {
+            // Show a dialog with the correct role info
+            await _showRoleMismatchDialog(profile.role);
+          }
+          return;
+        }
+
+        if (mounted) {
+          // Check if biometric is enabled, if not prompt for enrollment
+          final biometricEnabled = await ref.read(biometricEnabledProvider.future);
+          if (!biometricEnabled) {
+            context.go(RouteNames.biometricEnrollment);
+          } else {
+            _navigateToDashboard(profile.role);
+          }
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(e.toString().replaceAll('Exception: ', '')),
             backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -91,8 +127,120 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  void _navigateToDashboard() {
-    switch (widget.role) {
+  Future<void> _showRoleMismatchDialog(String actualRole) async {
+    final actualRoleTitle = _formatRole(actualRole);
+    final actualRoleColor = _getRoleColor(actualRole);
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Wrong Role Selected')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This account is registered as:',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: actualRoleColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: actualRoleColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(_getRoleIcon(actualRole), color: actualRoleColor),
+                  const SizedBox(width: 12),
+                  Text(
+                    actualRoleTitle,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: actualRoleColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'You selected "$_roleTitle" but your account is registered as "$actualRoleTitle". '
+              'Please go back and select the correct role.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              // Go back to role selection
+              context.go(RouteNames.roleSelection);
+            },
+            child: const Text('Go to Role Selection'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getRoleColor(String role) {
+    switch (role) {
+      case 'doctor':
+        return AppColors.doctor;
+      case 'pharmacist':
+        return AppColors.pharmacist;
+      case 'first_responder':
+        return AppColors.firstResponder;
+      default:
+        return AppColors.patient;
+    }
+  }
+
+  IconData _getRoleIcon(String role) {
+    switch (role) {
+      case 'doctor':
+        return Icons.medical_services_rounded;
+      case 'pharmacist':
+        return Icons.local_pharmacy_rounded;
+      case 'first_responder':
+        return Icons.emergency_rounded;
+      default:
+        return Icons.person_rounded;
+    }
+  }
+
+  String _formatRole(String role) {
+    switch (role) {
+      case 'doctor':
+        return 'Doctor';
+      case 'pharmacist':
+        return 'Pharmacist';
+      case 'first_responder':
+        return 'First Responder';
+      case 'patient':
+      default:
+        return 'Patient';
+    }
+  }
+
+  void _navigateToDashboard(String role) {
+    switch (role) {
       case 'doctor':
         context.go(RouteNames.doctorDashboard);
         break;
@@ -128,26 +276,67 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                // Role indicator
+                // Role indicator - more prominent
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _roleColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _roleTitle,
-                    style: TextStyle(
-                      color: _roleColor,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+                    color: _roleColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _roleColor.withOpacity(0.3),
+                      width: 2,
                     ),
                   ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: _roleColor.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _roleIcon,
+                          color: _roleColor,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Signing in as',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _roleColor.withOpacity(0.8),
+                              ),
+                            ),
+                            Text(
+                              _roleTitle,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: _roleColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go(RouteNames.roleSelection),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _roleColor,
+                        ),
+                        child: const Text('Change'),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 // Title
                 const Text(
                   'Welcome back!',
@@ -159,7 +348,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sign in to continue to your account',
+                  'Enter your $_roleTitle account credentials',
                   style: TextStyle(
                     fontSize: 15,
                     color: Theme.of(context)

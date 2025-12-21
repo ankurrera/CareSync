@@ -5,9 +5,18 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
+import '../../../../services/supabase_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../shared/presentation/widgets/dashboard_header.dart';
 import '../../../shared/presentation/widgets/quick_action_card.dart';
+
+final doctorTodayStatsProvider = FutureProvider<int>((ref) async {
+  return await SupabaseService.instance.getTodaysPrescriptionCount();
+});
+
+final doctorTotalStatsProvider = FutureProvider<int>((ref) async {
+  return await SupabaseService.instance.getTotalPrescriptionCount();
+});
 
 class DoctorDashboardScreen extends ConsumerWidget {
   const DoctorDashboardScreen({super.key});
@@ -15,50 +24,56 @@ class DoctorDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
+    final todayStats = ref.watch(doctorTodayStatsProvider);
+    final totalStats = ref.watch(doctorTotalStatsProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: AppSpacing.screenPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              DashboardHeader(
-                greeting: 'Good day,',
-                name: 'Dr. ${profile.valueOrNull?.fullName ?? 'Doctor'}',
-                subtitle: 'Manage patients & prescriptions',
-                roleColor: AppColors.doctor,
-                onNotificationTap: () {},
-                onProfileTap: () {},
-              ),
-              const SizedBox(height: 24),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(doctorTodayStatsProvider);
+            ref.invalidate(doctorTotalStatsProvider);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: AppSpacing.screenPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                DashboardHeader(
+                  greeting: 'Good day,',
+                  name: 'Dr. ${profile.valueOrNull?.fullName.isNotEmpty == true ? profile.valueOrNull!.fullName : 'Doctor'}',
+                  subtitle: 'Manage patients & prescriptions',
+                  roleColor: AppColors.doctor,
+                ),
+                const SizedBox(height: 24),
 
-              // Stats Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      context,
-                      'Today\'s Patients',
-                      '0',
-                      Icons.people_outline_rounded,
-                      AppColors.doctor,
+                // Stats Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        context,
+                        'Today\'s Rx',
+                        todayStats.valueOrNull?.toString() ?? '0',
+                        Icons.today_rounded,
+                        AppColors.doctor,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      context,
-                      'Prescriptions',
-                      '0',
-                      Icons.description_outlined,
-                      AppColors.pharmacist,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatCard(
+                        context,
+                        'Total Rx',
+                        totalStats.valueOrNull?.toString() ?? '0',
+                        Icons.description_outlined,
+                        AppColors.pharmacist,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
               // Quick Actions
               const Text(
@@ -106,7 +121,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       subtitle: 'Past prescriptions',
                       color: AppColors.info,
                       onTap: () {
-                        // TODO: Navigate to history
+                        context.push(RouteNames.doctorHistory);
                       },
                     ),
                   ),
@@ -118,7 +133,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       subtitle: 'Quick patient access',
                       color: AppColors.accent,
                       onTap: () {
-                        // TODO: Navigate to QR scanner
+                        context.push(RouteNames.doctorPatientLookup);
                       },
                     ),
                   ),
@@ -164,7 +179,8 @@ class DoctorDashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

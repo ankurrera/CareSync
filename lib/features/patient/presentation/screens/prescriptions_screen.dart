@@ -126,7 +126,37 @@ class _PrescriptionCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  if (prescription.isPublic)
+                  if (prescription.patientEntered)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.info.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_outline_rounded,
+                            size: 14,
+                            color: AppColors.info,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            'PATIENT INPUT',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.info,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (prescription.isPublic)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -336,7 +366,9 @@ class _PrescriptionDetailsSheet extends StatelessWidget {
                 _buildSection(
                   context,
                   'Prescribed By',
-                  'Dr. ${prescription.doctor?.fullName ?? 'Unknown'}',
+                  prescription.patientEntered
+                      ? 'Patient input'
+                      : 'Dr. ${prescription.doctor?.fullName ?? 'Unknown'}',
                   Icons.person_rounded,
                 ),
                 const SizedBox(height: 24),
