@@ -1,11 +1,11 @@
 {
-    "name": "caresync",
-    "short_name": "caresync",
+    "name": "CareSync",
+    "short_name": "CareSync",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "a biometric authenticated medical logging application",
+    "background_color": "#F8FAFC",
+    "theme_color": "#0D9488",
+    "description": "Biometric authenticated medical logging application",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
