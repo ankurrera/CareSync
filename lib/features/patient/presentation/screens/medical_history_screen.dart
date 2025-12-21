@@ -366,11 +366,11 @@ class MedicalHistoryScreen extends ConsumerWidget {
       
       await Supabase.instance.client.from('medical_conditions').insert({
         'patient_id': patientData.id,
-        'condition_type': type,
-        'description': description,
-        'severity': severity,
-        'is_public': isPublic,
-      });
+          'condition_type': type,
+          'description': description,
+          'severity': severity,
+          'is_public': isPublic,
+        });
       
       ref.invalidate(medicalConditionsProvider);
       

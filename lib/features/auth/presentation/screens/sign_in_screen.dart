@@ -296,7 +296,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         decoration: BoxDecoration(
                           color: _roleColor.withOpacity(0.2),
                           shape: BoxShape.circle,
-                        ),
+                  ),
                         child: Icon(
                           _roleIcon,
                           color: _roleColor,
@@ -316,11 +316,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                               ),
                             ),
                             Text(
-                              _roleTitle,
-                              style: TextStyle(
+                    _roleTitle,
+                    style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: _roleColor,
+                      color: _roleColor,
                               ),
                             ),
                           ],
@@ -332,7 +332,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           foregroundColor: _roleColor,
                         ),
                         child: const Text('Change'),
-                      ),
+                    ),
                     ],
                   ),
                 ),

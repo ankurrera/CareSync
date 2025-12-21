@@ -11,6 +11,8 @@ class RoleSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -18,7 +20,9 @@ class RoleSelectionScreen extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              AppColors.primarySurface,
+              isDark 
+                  ? AppColors.primary.withOpacity(0.15) 
+                  : AppColors.primarySurface,
               Theme.of(context).scaffoldBackgroundColor,
             ],
             stops: const [0.0, 0.4],

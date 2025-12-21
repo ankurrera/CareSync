@@ -150,7 +150,7 @@ class PrescriptionHistoryScreen extends ConsumerWidget {
                                       ),
                                     ),
                                   const SizedBox(width: 6),
-                                  _buildStatusBadge(status),
+                              _buildStatusBadge(status),
                                 ],
                               ),
                             ],

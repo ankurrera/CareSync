@@ -105,16 +105,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
       // Upload to Supabase Storage
       try {
-        await Supabase.instance.client.storage
-            .from('avatars')
-            .uploadBinary(
-              fileName,
-              bytes,
-              fileOptions: const FileOptions(
-                cacheControl: '3600',
-                upsert: true,
-              ),
-            );
+      await Supabase.instance.client.storage
+          .from('avatars')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: true,
+            ),
+          );
       } catch (storageError) {
         // If bucket doesn't exist or permission denied, show helpful message
         throw Exception(
