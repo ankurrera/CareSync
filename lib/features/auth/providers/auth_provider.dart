@@ -353,25 +353,24 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       _log('[BIO] Fingerprint success');
 
       // Try to restore session from stored tokens
-      final accessToken = await _storage.getAccessToken();
       final refreshToken = await _storage.getRefreshToken();
 
-      if (accessToken != null && refreshToken != null) {
-        try {
-          // Use recoverSession with both tokens
-          final response = await _supabase.auth.recoverSession(refreshToken);
-          if (response.session == null) {
-            _log('[BIO] Session recovery failed');
-            return false;
-          }
-          _log('[BIO] Session restored');
-        } catch (e) {
-          // Token expired or invalid
-          _log('[BIO] Session recovery error: $e');
+      if (refreshToken == null) {
+        _log('[BIO] No refresh token found');
+        return false;
+      }
+
+      try {
+        // Use recoverSession with refresh token
+        final response = await _supabase.auth.recoverSession(refreshToken);
+        if (response.session == null) {
+          _log('[BIO] Session recovery failed');
           return false;
         }
-      } else {
-        _log('[BIO] No tokens found');
+        _log('[BIO] Session restored');
+      } catch (e) {
+        // Token expired or invalid
+        _log('[BIO] Session recovery error: $e');
         return false;
       }
 

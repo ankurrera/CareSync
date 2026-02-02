@@ -343,10 +343,8 @@ class AuthController {
       }
       
       _log('[BIO] Fingerprint success');
-      _log('[BIO] Session restored');
     } else {
       _log('[BIO] Mode = SETUP (or not required)');
-      _log('[AUTH] Session restored without biometric');
     }
 
     _log('[AUTH] Session restored');
