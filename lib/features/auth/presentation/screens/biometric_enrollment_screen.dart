@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
+import '../../../../services/kyc_service.dart';
 import '../../providers/auth_provider.dart';
 
 class BiometricEnrollmentScreen extends ConsumerStatefulWidget {
@@ -32,6 +33,23 @@ class _BiometricEnrollmentScreenState
     });
 
     try {
+      // Check KYC status first (unless accessed from profile settings)
+      if (!widget.isMandatory) {
+        final kycStatus = await ref.read(kycStatusProvider.future);
+        if (kycStatus == null || kycStatus.status != KYCStatus.verified) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('KYC verification required before enabling biometric login'),
+                backgroundColor: AppColors.warning,
+              ),
+            );
+            context.push(RouteNames.kycVerification);
+          }
+          return;
+        }
+      }
+
       await ref.read(authNotifierProvider.notifier).enrollBiometric();
 
       if (mounted) {

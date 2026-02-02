@@ -117,7 +117,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.biometricEnrollment,
         name: 'biometricEnrollment',
-        builder: (context, state) => const BiometricEnrollmentScreen(),
+        builder: (context, state) {
+          final isMandatory = state.extra as bool? ?? false;
+          return BiometricEnrollmentScreen(isMandatory: isMandatory);
+        },
       ),
       GoRoute(
         path: RouteNames.kycVerification,
