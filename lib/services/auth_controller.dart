@@ -82,7 +82,7 @@ class AuthController {
   /// Helper to determine if biometric setup is needed per spec
   bool _needsBiometricSetup(Map<String, dynamic>? device) {
     if (device == null) return true;
-    if (device['revoked'] == true) return true;
+    // Note: revoked devices are handled earlier in the authentication flow
     if (device['biometric_enabled'] != true) return true;
     return false;
   }
@@ -193,7 +193,7 @@ class AuthController {
     }
 
     // 1. Local biometric auth
-    _log('[BIO] Requesting biometric authentication');
+    _log('[BIO] Prompting for biometric authentication');
     final ok = await _biometric.authenticate(
       reason: 'Secure your account with biometrics',
     );

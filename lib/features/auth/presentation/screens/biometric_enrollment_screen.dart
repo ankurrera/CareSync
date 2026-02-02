@@ -31,8 +31,8 @@ class _BiometricEnrollmentScreenState
     super.initState();
     // Trigger biometric setup at the right lifecycle moment
     if (widget.isMandatory) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await _checkAndEnrollBiometric();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndEnrollBiometric();
       });
     }
   }
@@ -107,7 +107,7 @@ class _BiometricEnrollmentScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '').replaceAll('AuthException: ', '')),
+            content: Text(_extractErrorMessage(e)),
             backgroundColor: AppColors.error,
           ),
         );
@@ -124,6 +124,21 @@ class _BiometricEnrollmentScreenState
 
   void _skipBiometric() {
     _navigateToDashboard();
+  }
+
+  /// Extract user-friendly error message from exception
+  String _extractErrorMessage(Object error) {
+    String errorMessage = error.toString();
+    
+    // Remove common exception prefixes
+    final prefixes = ['Exception: ', 'AuthException: ', 'BiometricException: '];
+    for (final prefix in prefixes) {
+      if (errorMessage.startsWith(prefix)) {
+        return errorMessage.substring(prefix.length);
+      }
+    }
+    
+    return errorMessage;
   }
 
   void _navigateToDashboard() {
