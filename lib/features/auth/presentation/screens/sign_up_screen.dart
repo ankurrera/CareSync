@@ -89,10 +89,44 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final originalError = e.toString();
+        String errorMessage = originalError;
+        bool showSignInAction = false;
+        
+        // Parse and provide user-friendly error messages
+        if (originalError.contains('over_email_send_rate_limit')) {
+          errorMessage = '⏱️ Too many sign-up attempts. Please wait a minute and try again.';
+        } else if (originalError.contains('User already registered') || originalError.contains('already registered')) {
+          errorMessage = '📧 This email is already registered. Try signing in instead.';
+          showSignInAction = true;
+        } else if (originalError.contains('Invalid email') || originalError.contains('invalid email')) {
+          errorMessage = '📧 Please enter a valid email address.';
+        } else if (originalError.contains('Password') && originalError.contains('weak')) {
+          errorMessage = '🔒 Password is too weak. Use at least 8 characters with letters and numbers.';
+        } else if (originalError.contains('Email not confirmed')) {
+          errorMessage = '📬 Please check your email and verify your account before signing in.';
+        } else if (originalError.contains('Network') || originalError.contains('network')) {
+          errorMessage = '📡 Network error. Please check your connection and try again.';
+        } else if (originalError.contains('AuthApiException')) {
+          // Extract message from AuthApiException format
+          final match = RegExp(r'message:\s*([^,)]+)').firstMatch(originalError);
+          if (match != null && match.group(1) != null) {
+            errorMessage = match.group(1)!.trim();
+          }
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5), // Longer duration for rate limit messages
+            action: showSignInAction
+                ? SnackBarAction(
+                    label: 'Sign In',
+                    textColor: Colors.white,
+                    onPressed: () => context.pop(),
+                  )
+                : null,
           ),
         );
       }
