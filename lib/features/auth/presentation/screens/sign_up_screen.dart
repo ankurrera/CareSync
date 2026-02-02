@@ -79,8 +79,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           );
 
       if (mounted) {
-        // After signup, go to biometric enrollment
-        context.go(RouteNames.biometricEnrollment);
+        // After signup, go to KYC verification for patients
+        // For other roles, go to biometric enrollment
+        if (widget.role == 'patient') {
+          context.go(RouteNames.kycVerification);
+        } else {
+          context.go(RouteNames.biometricEnrollment);
+        }
       }
     } catch (e) {
       if (mounted) {

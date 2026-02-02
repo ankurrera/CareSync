@@ -6,6 +6,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/biometric_service.dart';
 import '../../../services/secure_storage_service.dart';
 import '../../../services/supabase_service.dart';
+import '../../../services/kyc_service.dart';
+import '../../../services/two_factor_service.dart';
+import '../../../services/device_service.dart';
+import '../../../services/audit_service.dart';
 import '../../patient/providers/patient_provider.dart';
 import '../../shared/models/user_profile.dart';
 
@@ -53,6 +57,21 @@ final biometricEnabledProvider = FutureProvider<bool>((ref) async {
   return await SecureStorageService.instance.isBiometricEnabled();
 });
 
+/// Provider for KYC status
+final kycStatusProvider = FutureProvider<KYCVerification?>((ref) async {
+  return await KYCService.instance.getKYCStatus();
+});
+
+/// Provider for user devices
+final userDevicesProvider = FutureProvider<List<RegisteredDevice>>((ref) async {
+  return await DeviceService.instance.getUserDevices();
+});
+
+/// Provider for current device registration status
+final currentDeviceRegisteredProvider = FutureProvider<bool>((ref) async {
+  return await DeviceService.instance.isDeviceRegistered();
+});
+
 /// Auth notifier for handling authentication operations
 class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   AuthNotifier() : super(const AsyncValue.loading()) {
@@ -62,6 +81,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   final _supabase = SupabaseService.instance;
   final _biometric = BiometricService.instance;
   final _storage = SecureStorageService.instance;
+  final _kycService = KYCService.instance;
+  final _twoFactorService = TwoFactorService.instance;
+  final _deviceService = DeviceService.instance;
+  final _auditService = AuditService.instance;
 
   void _init() {
     state = AsyncValue.data(_supabase.currentUser);
@@ -113,8 +136,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  /// Sign in with email and password
-  Future<void> signIn({
+  /// Sign in with email and password (includes 2FA check)
+  Future<SignInResult> signIn({
     required String email,
     required String password,
   }) async {
@@ -129,10 +152,44 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         throw Exception('Invalid credentials');
       }
 
+      final userId = response.user!.id;
+
+      // Store tokens for session persistence
+      if (response.session != null) {
+        await _storage.setAccessToken(response.session!.accessToken);
+        await _storage.setRefreshToken(response.session!.refreshToken ?? '');
+      }
+
       // Store user ID
-      await _storage.setUserId(response.user!.id);
+      await _storage.setUserId(userId);
+
+      // Check if device is registered
+      final isDeviceRegistered = await _deviceService.isDeviceRegistered();
+
+      // If device is not registered, require 2FA
+      if (!isDeviceRegistered) {
+        state = AsyncValue.data(response.user);
+        return SignInResult(
+          user: response.user,
+          requiresTwoFactor: true,
+          email: email,
+        );
+      }
+
+      // Update device last used
+      await _deviceService.updateDeviceLastUsed();
+
+      // Log login
+      final deviceId = await _deviceService.getDeviceId();
+      if (deviceId != null) {
+        await _auditService.logLogin(deviceId: deviceId);
+      }
 
       state = AsyncValue.data(response.user);
+      return SignInResult(
+        user: response.user,
+        requiresTwoFactor: false,
+      );
     } on AuthException catch (e, st) {
       // Map Supabase auth errors to friendlier messages
       final message = _mapAuthError(e);
@@ -144,9 +201,47 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
+  /// Complete 2FA and register device
+  Future<void> completeTwoFactor({
+    required bool registerDevice,
+    required bool enableBiometric,
+  }) async {
+    try {
+      if (registerDevice) {
+        // Register device
+        await _deviceService.registerDevice(
+          biometricEnabled: enableBiometric,
+        );
+
+        // Log device registration
+        final deviceInfo = await _deviceService.getDeviceInfo();
+        await _auditService.logDeviceRegistration(
+          deviceId: deviceInfo.deviceId,
+          deviceName: deviceInfo.deviceName,
+        );
+
+        // Enable biometric locally if requested
+        if (enableBiometric) {
+          await _storage.setBiometricEnabled(true);
+        }
+      }
+
+      // Update last activity
+      await _storage.updateLastActivity();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Sign in with biometrics (for returning users on enrolled devices)
   Future<bool> signInWithBiometric() async {
     try {
+      // Check if session has timed out
+      final hasTimedOut = await _storage.hasSessionTimedOut();
+      if (hasTimedOut) {
+        return false;
+      }
+
       // Check if biometric is enabled
       final isEnabled = await _storage.isBiometricEnabled();
       if (!isEnabled) return false;
@@ -158,11 +253,28 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
       if (!authenticated) return false;
 
+      // Try to restore session from stored tokens
+      final accessToken = await _storage.getAccessToken();
+      final refreshToken = await _storage.getRefreshToken();
+
+      if (accessToken != null && refreshToken != null) {
+        try {
+          await _supabase.auth.setSession(refreshToken);
+        } catch (e) {
+          // Token expired or invalid
+          return false;
+        }
+      }
+
       // Update device last used
       final deviceId = await _storage.getDeviceId();
       if (deviceId != null) {
-        await _supabase.updateDeviceLastUsed(deviceId);
+        await _deviceService.updateDeviceLastUsed();
+        await _auditService.logLogin(deviceId: deviceId, biometric: true);
       }
+
+      // Update last activity
+      await _storage.updateLastActivity();
 
       return true;
     } catch (e) {
@@ -182,21 +294,25 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         throw Exception('Biometric authentication failed');
       }
 
-      // Get or create device ID
-      final deviceId = await _storage.getOrCreateDeviceId();
-
-      // Get device name
-      final deviceName = await _getDeviceName();
-
-      // Register device in backend
-      await _supabase.registerDevice(
-        deviceId: deviceId,
-        deviceName: deviceName,
-        platform: Platform.isIOS ? 'ios' : 'android',
-      );
+      // Register device with biometric enabled
+      await _deviceService.registerDevice(biometricEnabled: true);
 
       // Enable biometric locally
       await _storage.setBiometricEnabled(true);
+
+      // Store current session tokens for biometric quick-login
+      final session = _supabase.auth.currentSession;
+      if (session != null) {
+        await _storage.setAccessToken(session.accessToken);
+        await _storage.setRefreshToken(session.refreshToken ?? '');
+      }
+
+      // Log device registration
+      final deviceInfo = await _deviceService.getDeviceInfo();
+      await _auditService.logDeviceRegistration(
+        deviceId: deviceInfo.deviceId,
+        deviceName: deviceInfo.deviceName,
+      );
     } catch (e) {
       rethrow;
     }
@@ -204,6 +320,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
   /// Sign out
   Future<void> signOut() async {
+    // Log logout
+    final deviceId = await _storage.getDeviceId();
+    if (deviceId != null) {
+      await _auditService.logLogout(deviceId: deviceId);
+    }
+
     await _supabase.signOut();
     await _storage.clearSession();
     state = const AsyncValue.data(null);
@@ -258,6 +380,19 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
     return 'Unable to sign in. Please try again.';
   }
+}
+
+/// Result of sign in operation
+class SignInResult {
+  final User? user;
+  final bool requiresTwoFactor;
+  final String? email;
+
+  SignInResult({
+    this.user,
+    required this.requiresTwoFactor,
+    this.email,
+  });
 }
 
 final authNotifierProvider =
