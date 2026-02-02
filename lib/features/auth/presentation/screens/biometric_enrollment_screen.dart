@@ -38,9 +38,6 @@ class _BiometricEnrollmentScreenState
   }
 
   Future<void> _checkAndEnrollBiometric() async {
-    // Only auto-trigger if mandatory
-    if (!widget.isMandatory) return;
-
     print('[BIO] Auto-triggering biometric setup (mandatory)');
     await _enrollBiometric();
   }
