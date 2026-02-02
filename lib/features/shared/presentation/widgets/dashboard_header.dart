@@ -4,14 +4,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../routing/route_names.dart';
 import '../../../auth/providers/auth_provider.dart';
+import '../screens/notifications_screen.dart';
 
 class DashboardHeader extends ConsumerWidget {
   final String greeting;
   final String name;
   final String subtitle;
   final Color roleColor;
-  final VoidCallback onNotificationTap;
-  final VoidCallback onProfileTap;
+  final VoidCallback? onNotificationTap;
+  final VoidCallback? onProfileTap;
 
   const DashboardHeader({
     super.key,
@@ -19,33 +20,44 @@ class DashboardHeader extends ConsumerWidget {
     required this.name,
     required this.subtitle,
     required this.roleColor,
-    required this.onNotificationTap,
-    required this.onProfileTap,
+    this.onNotificationTap,
+    this.onProfileTap,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(currentProfileProvider);
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
+    
     return Row(
       children: [
         // Profile Avatar
         GestureDetector(
-          onTap: onProfileTap,
+          onTap: onProfileTap ?? () => context.push(RouteNames.profile),
           child: Container(
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: roleColor.withOpacity(0.15),
+              color: roleColor.withValues(alpha: 0.15),
               shape: BoxShape.circle,
               border: Border.all(
-                color: roleColor.withOpacity(0.3),
+                color: roleColor.withValues(alpha: 0.3),
                 width: 2,
               ),
+              image: profile.valueOrNull?.avatarUrl != null
+                  ? DecorationImage(
+                      image: NetworkImage(profile.valueOrNull!.avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
-            child: Icon(
-              Icons.person_rounded,
-              color: roleColor,
-              size: 28,
-            ),
+            child: profile.valueOrNull?.avatarUrl == null
+                ? Icon(
+                    Icons.person_rounded,
+                    color: roleColor,
+                    size: 28,
+                  )
+                : null,
           ),
         ),
         const SizedBox(width: 14),
@@ -59,7 +71,7 @@ class DashboardHeader extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: 14,
                   color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
               Text(
@@ -74,13 +86,42 @@ class DashboardHeader extends ConsumerWidget {
             ],
           ),
         ),
-        // Notification button
-        IconButton(
-          onPressed: onNotificationTap,
-          icon: const Icon(Icons.notifications_outlined),
-          style: IconButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-          ),
+        // Notification button with badge
+        Stack(
+          children: [
+            IconButton(
+              onPressed: onNotificationTap ?? () => context.push(RouteNames.notifications),
+              icon: const Icon(Icons.notifications_outlined),
+              style: IconButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+              ),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    unreadCount > 9 ? '9+' : unreadCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
         ),
         // Sign out button
         IconButton(
@@ -104,6 +145,8 @@ class DashboardHeader extends ConsumerWidget {
             );
             if (confirmed == true) {
               await ref.read(authNotifierProvider.notifier).signOut();
+              // Invalidate all providers on sign out
+              ref.invalidate(currentProfileProvider);
               if (context.mounted) {
                 context.go(RouteNames.roleSelection);
               }

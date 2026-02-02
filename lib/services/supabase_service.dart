@@ -22,10 +22,12 @@ class SupabaseService {
   Future<AuthResponse> signUp({
     required String email,
     required String password,
+    Map<String, dynamic>? data,
   }) async {
     return await auth.signUp(
       email: email,
       password: password,
+      data: data,
     );
   }
 
@@ -126,17 +128,42 @@ class SupabaseService {
   // PATIENT OPERATIONS
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Get patient data for current user
+  /// Get patient data for current user (auto-creates if doesn't exist)
   Future<Map<String, dynamic>?> getPatientData() async {
     if (currentUserId == null) return null;
 
-    final response = await client
+    // Try to get existing patient record
+    var response = await client
         .from('patients')
         .select()
         .eq('user_id', currentUserId!)
         .maybeSingle();
 
+    // If no patient record exists, create one
+    if (response == null) {
+      try {
+        response = await client
+            .from('patients')
+            .insert({'user_id': currentUserId})
+            .select()
+            .single();
+      } catch (e) {
+        // If insert fails (e.g., RLS), try to get again (might have been created)
+        response = await client
+            .from('patients')
+            .select()
+            .eq('user_id', currentUserId!)
+            .maybeSingle();
+      }
+    }
+
     return response;
+  }
+  
+  /// Ensure patient record exists for current user
+  Future<String?> ensurePatientExists() async {
+    final data = await getPatientData();
+    return data?['id'] as String?;
   }
 
   /// Create or update patient data
@@ -170,6 +197,7 @@ class SupabaseService {
     required String diagnosis,
     String? notes,
     bool isPublic = false,
+    bool patientEntered = false,
     required List<Map<String, dynamic>> items,
   }) async {
     // Create prescription
@@ -177,10 +205,11 @@ class SupabaseService {
         .from('prescriptions')
         .insert({
           'patient_id': patientId,
-          'doctor_id': currentUserId,
+          'doctor_id': patientEntered ? null : currentUserId,
           'diagnosis': diagnosis,
           'notes': notes,
           'is_public': isPublic,
+          'patient_entered': patientEntered,
         })
         .select()
         .single();
@@ -221,19 +250,115 @@ class SupabaseService {
   // ─────────────────────────────────────────────────────────────────────────
 
   /// Get public emergency data for a patient by QR code ID
+  /// Returns formatted data for emergency display
   Future<Map<String, dynamic>?> getEmergencyData(String qrCodeId) async {
-    final patient = await client
+    // Get patient with profile and public conditions
+    final patientData = await client
         .from('patients')
         .select('''
+          id,
           blood_type,
           emergency_contact,
-          profiles!inner(full_name),
-          medical_conditions(condition_type, description, severity)
+          profiles!inner(full_name)
         ''')
         .eq('qr_code_id', qrCodeId)
         .maybeSingle();
 
-    return patient;
+    if (patientData == null) return null;
+
+    final patientId = patientData['id'];
+    final profile = patientData['profiles'] as Map<String, dynamic>?;
+
+    // Get public medical conditions
+    final conditions = await client
+        .from('medical_conditions')
+        .select('condition_type, description, severity')
+        .eq('patient_id', patientId)
+        .eq('is_public', true);
+
+    // Get active public prescription medications
+    final prescriptions = await client
+        .from('prescriptions')
+        .select('prescription_items(medicine_name, dosage, frequency)')
+        .eq('patient_id', patientId)
+        .eq('is_public', true)
+        .eq('status', 'active');
+
+    // Flatten medications from all prescriptions
+    final medications = <Map<String, dynamic>>[];
+    for (final rx in prescriptions) {
+      final items = rx['prescription_items'] as List? ?? [];
+      for (final item in items) {
+        medications.add({
+          'medicine': item['medicine_name'],
+          'dosage': item['dosage'],
+          'frequency': item['frequency'],
+        });
+      }
+    }
+
+    // Return formatted data
+    return {
+      'patient': {
+        'full_name': profile?['full_name'],
+        'blood_type': patientData['blood_type'],
+        'emergency_contact': patientData['emergency_contact'],
+      },
+      'conditions': List<Map<String, dynamic>>.from(conditions).map((c) => {
+        'type': c['condition_type'],
+        'description': c['description'],
+        'severity': c['severity'],
+      }).toList(),
+      'medications': medications,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATS HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Get today's prescription count for a doctor
+  Future<int> getTodaysPrescriptionCount() async {
+    if (currentUserId == null) return 0;
+    
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    
+    final result = await client
+        .from('prescriptions')
+        .select('id')
+        .eq('doctor_id', currentUserId!)
+        .gte('created_at', startOfDay.toIso8601String());
+    
+    return (result as List).length;
+  }
+
+  /// Get total prescription count for a doctor
+  Future<int> getTotalPrescriptionCount() async {
+    if (currentUserId == null) return 0;
+    
+    final result = await client
+        .from('prescriptions')
+        .select('id')
+        .eq('doctor_id', currentUserId!);
+    
+    return (result as List).length;
+  }
+
+  /// Get today's dispensing count for a pharmacist
+  Future<int> getTodaysDispensingCount() async {
+    if (currentUserId == null) return 0;
+    
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    
+    final result = await client
+        .from('dispensing_records')
+        .select('id')
+        .eq('pharmacist_id', currentUserId!)
+        .gte('dispensed_at', startOfDay.toIso8601String());
+    
+    return (result as List).length;
   }
 }
 

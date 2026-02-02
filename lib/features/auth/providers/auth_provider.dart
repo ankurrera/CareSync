@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/biometric_service.dart';
 import '../../../services/secure_storage_service.dart';
 import '../../../services/supabase_service.dart';
+import '../../patient/providers/patient_provider.dart';
 import '../../shared/models/user_profile.dart';
 
 /// Provider for auth state changes
@@ -13,7 +14,7 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return SupabaseService.instance.authStateChanges.map((state) => state.session?.user);
 });
 
-/// Provider for current user profile
+/// Provider for current user profile - auto-refreshes on auth changes
 final currentProfileProvider = FutureProvider<UserProfile?>((ref) async {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) return null;
@@ -22,6 +23,19 @@ final currentProfileProvider = FutureProvider<UserProfile?>((ref) async {
   if (profileData == null) return null;
 
   return UserProfile.fromJson(profileData);
+});
+
+/// Provider to invalidate all user data on sign out
+final signOutProvider = Provider<Future<void> Function(WidgetRef ref)>((ref) {
+  return (WidgetRef widgetRef) async {
+    await ref.read(authNotifierProvider.notifier).signOut();
+    // Invalidate all user-related providers
+    widgetRef.invalidate(currentProfileProvider);
+    widgetRef.invalidate(biometricEnabledProvider);
+    widgetRef.invalidate(patientDataProvider);
+    widgetRef.invalidate(patientPrescriptionsProvider);
+    widgetRef.invalidate(medicalConditionsProvider);
+  };
 });
 
 /// Provider for biometric availability
@@ -63,17 +77,22 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }) async {
     state = const AsyncValue.loading();
     try {
-      // Create auth user
+      // Create auth user with metadata (triggers profile creation)
       final response = await _supabase.signUp(
         email: email,
         password: password,
+        data: {
+          'full_name': fullName,
+          'phone': phone,
+          'role': role,
+        },
       );
 
       if (response.user == null) {
         throw Exception('Failed to create account');
       }
 
-      // Create profile
+      // Update profile to ensure phone is saved (trigger might not include it)
       await _supabase.upsertProfile({
         'email': email,
         'phone': phone,
@@ -114,9 +133,14 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       await _storage.setUserId(response.user!.id);
 
       state = AsyncValue.data(response.user);
+    } on AuthException catch (e, st) {
+      // Map Supabase auth errors to friendlier messages
+      final message = _mapAuthError(e);
+      state = AsyncValue.error(message, st);
+      throw Exception(message);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
-      rethrow;
+      throw Exception('Unable to sign in. Please try again.');
     }
   }
 
@@ -219,6 +243,20 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       return 'Android Device';
     }
     return 'Unknown Device';
+  }
+
+  String _mapAuthError(AuthException e) {
+    final msg = e.message.toLowerCase();
+    if (msg.contains('invalid login credentials')) {
+      return 'Incorrect email or password';
+    }
+    if (msg.contains('email not confirmed')) {
+      return 'Please verify your email before signing in';
+    }
+    if (msg.contains('user not found')) {
+      return 'No account found for this email';
+    }
+    return 'Unable to sign in. Please try again.';
   }
 }
 

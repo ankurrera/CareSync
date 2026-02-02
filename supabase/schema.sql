@@ -114,11 +114,12 @@ CREATE TABLE IF NOT EXISTS first_responders (
 CREATE TABLE IF NOT EXISTS prescriptions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    doctor_id UUID NOT NULL REFERENCES profiles(id),
+    doctor_id UUID REFERENCES profiles(id), -- nullable for patient-entered
     diagnosis TEXT NOT NULL,
     notes TEXT,
     is_public BOOLEAN DEFAULT FALSE, -- visible to first responders
     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+    patient_entered BOOLEAN DEFAULT FALSE, -- flag prescriptions created by patients
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -241,6 +242,14 @@ CREATE POLICY "Doctors can create prescriptions"
     ON prescriptions FOR INSERT
     WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'doctor');
 
+CREATE POLICY "Patients can create their own prescriptions"
+    ON prescriptions FOR INSERT
+    WITH CHECK (
+        (SELECT role FROM profiles WHERE id = auth.uid()) = 'patient'
+        AND patient_id IN (SELECT id FROM patients WHERE user_id = auth.uid())
+        AND patient_entered = TRUE
+    );
+
 CREATE POLICY "Doctors can view prescriptions they created"
     ON prescriptions FOR SELECT
     USING (doctor_id = auth.uid());
@@ -264,6 +273,17 @@ CREATE POLICY "Users can view prescription items for accessible prescriptions"
 CREATE POLICY "Doctors can create prescription items"
     ON prescription_items FOR INSERT
     WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'doctor');
+
+CREATE POLICY "Patients can create prescription items on their own prescriptions"
+    ON prescription_items FOR INSERT
+    WITH CHECK (
+        (SELECT role FROM profiles WHERE id = auth.uid()) = 'patient'
+        AND prescription_id IN (
+            SELECT id FROM prescriptions 
+            WHERE patient_id IN (SELECT id FROM patients WHERE user_id = auth.uid())
+              AND patient_entered = TRUE
+        )
+    );
 
 -- DISPENSING RECORDS POLICIES
 CREATE POLICY "Pharmacists can create dispensing records"

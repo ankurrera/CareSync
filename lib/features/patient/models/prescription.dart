@@ -2,10 +2,11 @@
 class Prescription {
   final String id;
   final String patientId;
-  final String doctorId;
+  final String? doctorId;
   final String diagnosis;
   final String? notes;
   final bool isPublic;
+  final bool patientEntered;
   final String status;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -15,10 +16,11 @@ class Prescription {
   const Prescription({
     required this.id,
     required this.patientId,
-    required this.doctorId,
+    this.doctorId,
     required this.diagnosis,
     this.notes,
     required this.isPublic,
+    this.patientEntered = false,
     required this.status,
     required this.createdAt,
     this.updatedAt,
@@ -33,10 +35,11 @@ class Prescription {
     return Prescription(
       id: json['id'] as String,
       patientId: json['patient_id'] as String,
-      doctorId: json['doctor_id'] as String,
+      doctorId: json['doctor_id'] as String?,
       diagnosis: json['diagnosis'] as String,
       notes: json['notes'] as String?,
       isPublic: json['is_public'] as bool? ?? false,
+      patientEntered: json['patient_entered'] as bool? ?? false,
       status: json['status'] as String? ?? 'active',
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: json['updated_at'] != null
@@ -58,6 +61,7 @@ class Prescription {
       'diagnosis': diagnosis,
       'notes': notes,
       'is_public': isPublic,
+      'patient_entered': patientEntered,
       'status': status,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),

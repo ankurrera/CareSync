@@ -7,6 +7,10 @@ abstract class RouteNames {
   static const String signUp = '/sign-up';
   static const String biometricEnrollment = '/biometric-enrollment';
 
+  // Common/Shared
+  static const String profile = '/profile';
+  static const String notifications = '/notifications';
+
   // Patient
   static const String patientDashboard = '/patient';
   static const String patientPrescriptions = '/patient/prescriptions';
@@ -14,17 +18,20 @@ abstract class RouteNames {
   static const String patientQrCode = '/patient/qr-code';
   static const String patientProfile = '/patient/profile';
   static const String patientPrivacy = '/patient/privacy';
+  static const String patientNewPrescription = '/patient/new-prescription';
 
   // Doctor
   static const String doctorDashboard = '/doctor';
   static const String doctorPatientLookup = '/doctor/patient-lookup';
   static const String doctorNewPrescription = '/doctor/new-prescription';
   static const String doctorHistory = '/doctor/history';
+  static const String doctorScanQr = '/doctor/scan-qr';
 
   // Pharmacist
   static const String pharmacistDashboard = '/pharmacist';
   static const String pharmacistDispense = '/pharmacist/dispense';
   static const String pharmacistHistory = '/pharmacist/history';
+  static const String pharmacistSearch = '/pharmacist/search';
 
   // First Responder
   static const String firstResponderDashboard = '/first-responder';

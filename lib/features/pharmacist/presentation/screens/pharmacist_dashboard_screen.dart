@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../routing/route_names.dart';
+import '../../../../services/supabase_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 import '../../../shared/presentation/widgets/dashboard_header.dart';
 import '../../../shared/presentation/widgets/quick_action_card.dart';
-import 'dispense_screen.dart';
+
+final pharmacistTodayStatsProvider = FutureProvider<int>((ref) async {
+  return await SupabaseService.instance.getTodaysDispensingCount();
+});
 
 class PharmacistDashboardScreen extends ConsumerWidget {
   const PharmacistDashboardScreen({super.key});
@@ -14,50 +20,56 @@ class PharmacistDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(currentProfileProvider);
+    final todayStats = ref.watch(pharmacistTodayStatsProvider);
 
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: AppSpacing.screenPadding,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              DashboardHeader(
-                greeting: 'Hello,',
-                name: profile.valueOrNull?.fullName ?? 'Pharmacist',
-                subtitle: 'Dispense & track medications',
-                roleColor: AppColors.pharmacist,
-                onNotificationTap: () {},
-                onProfileTap: () {},
-              ),
-              const SizedBox(height: 24),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(pharmacistTodayStatsProvider);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: AppSpacing.screenPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                DashboardHeader(
+                  greeting: 'Hello,',
+                  name: profile.valueOrNull?.fullName.isNotEmpty == true 
+                      ? profile.valueOrNull!.fullName 
+                      : 'Pharmacist',
+                  subtitle: 'Dispense & track medications',
+                  roleColor: AppColors.pharmacist,
+                ),
+                const SizedBox(height: 24),
 
-              // Stats Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      context,
-                      'Today\'s Dispensed',
-                      '0',
-                      Icons.medication_outlined,
-                      AppColors.pharmacist,
+                // Stats Row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        context,
+                        'Today\'s Dispensed',
+                        todayStats.valueOrNull?.toString() ?? '0',
+                        Icons.medication_outlined,
+                        AppColors.pharmacist,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      context,
-                      'Pending',
-                      '0',
-                      Icons.pending_actions_rounded,
-                      AppColors.warning,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatCard(
+                        context,
+                        'Scan to Dispense',
+                        '→',
+                        Icons.qr_code_scanner_rounded,
+                        AppColors.primary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
               // Quick Actions
               const Text(
@@ -77,52 +89,19 @@ class PharmacistDashboardScreen extends ConsumerWidget {
                       subtitle: 'Scan patient QR',
                       color: AppColors.pharmacist,
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DispenseScreen(),
-                          ),
-                        );
+                        context.push(RouteNames.pharmacistDispense);
                       },
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: QuickActionCard(
-                      icon: Icons.search_rounded,
-                      title: 'Find Patient',
-                      subtitle: 'Search by ID',
-                      color: AppColors.info,
-                      onTap: () {
-                        // TODO: Navigate to patient search
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
                   Expanded(
                     child: QuickActionCard(
                       icon: Icons.history_rounded,
                       title: 'Dispensing History',
                       subtitle: 'View past records',
-                      color: AppColors.secondary,
+                      color: AppColors.info,
                       onTap: () {
-                        // TODO: Navigate to history
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: QuickActionCard(
-                      icon: Icons.inventory_2_outlined,
-                      title: 'Inventory',
-                      subtitle: 'Stock management',
-                      color: AppColors.accent,
-                      onTap: () {
-                        // TODO: Navigate to inventory
+                        context.push(RouteNames.pharmacistHistory);
                       },
                     ),
                   ),
@@ -176,7 +155,8 @@ class PharmacistDashboardScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

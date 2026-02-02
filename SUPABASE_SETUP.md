@@ -111,7 +111,42 @@ flutter build web
 
 Host the `build/web` folder on any static hosting (Vercel, Netlify, Firebase Hosting).
 
-## Step 7: Set Up Row Level Security (RLS)
+## Step 7: Create Storage Bucket for Avatars
+
+1. Go to **Storage** in Supabase dashboard (left sidebar)
+2. Click **"Create a new bucket"**
+3. Set bucket name to `avatars`
+4. Enable **"Public bucket"** (so avatar images are publicly accessible)
+5. Click **"Create bucket"**
+
+### Storage Policies (Optional but Recommended)
+
+In the SQL Editor, run this to allow users to upload their own avatars:
+
+```sql
+-- Allow users to upload their own avatar
+CREATE POLICY "Users can upload their avatar"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'avatars' 
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Allow users to update their own avatar
+CREATE POLICY "Users can update their avatar"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'avatars' AND owner = auth.uid());
+
+-- Allow public read access to avatars
+CREATE POLICY "Public avatar access"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'avatars');
+```
+
+## Step 8: Set Up Row Level Security (RLS)
 
 The schema already includes RLS policies, but verify they're enabled:
 
@@ -120,7 +155,7 @@ The schema already includes RLS policies, but verify they're enabled:
 3. In the table view, click the shield icon (🛡️) or go to **Policies**
 4. Verify "Enable RLS" is ON for all tables
 
-## Step 8: Test the Setup
+## Step 9: Test the Setup
 
 ### Test User Registration
 1. Run your Flutter app: `flutter run`
@@ -154,10 +189,26 @@ This error occurs because some RLS policies on the `profiles` table reference th
 
 This creates a helper function `get_user_role()` that bypasses RLS and updates all policies to use it.
 
+### Medical conditions or patient data not showing (empty screens)
+
+This happens when a patient record wasn't created for the user. 
+
+**Fix:** Run the `supabase/schema_fix_v2.sql` file in SQL Editor:
+
+1. Go to **SQL Editor** in Supabase dashboard
+2. Click **"New query"** 
+3. Copy the entire contents of `supabase/schema_fix_v2.sql`
+4. Paste and click **"Run"**
+
+This will:
+- Fix the RLS policies to allow patients to create their own records
+- Add a trigger to auto-create patient records when a user signs up as a patient
+- Create patient records for any existing patient users who don't have one
+
 ### "Permission denied" errors
 - Check that RLS policies are correctly set up
 - Verify the user's role in the `profiles` table matches expected permissions
-- **Make sure you've run `schema_fix.sql`** after the main `schema.sql`
+- **Make sure you've run both `schema_fix.sql` and `schema_fix_v2.sql`** after the main `schema.sql`
 
 ### Profile not created on signup
 Run this in SQL Editor to manually create the trigger:
