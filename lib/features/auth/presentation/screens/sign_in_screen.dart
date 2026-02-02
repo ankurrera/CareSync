@@ -179,18 +179,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       }
     } catch (e) {
       if (mounted) {
-        String errorMessage = 'Biometric authentication failed';
+        String errorMessage = 'Biometric authentication failed. Please try again or sign in with your credentials.';
         
         // Handle specific error cases
         final errorStr = e.toString();
         if (errorStr.contains('session expired') || errorStr.contains('timed out')) {
           errorMessage = 'Session expired. Please sign in with your credentials.';
         } else if (errorStr.contains('canceled')) {
-          errorMessage = 'Authentication canceled';
+          errorMessage = 'Authentication canceled. Please try again or sign in with your credentials.';
         } else if (errorStr.contains('not enrolled')) {
           errorMessage = 'No biometrics enrolled. Please set up biometric authentication in your device settings.';
         } else if (errorStr.contains('not available')) {
-          errorMessage = 'Biometric authentication is not available on this device';
+          errorMessage = 'Biometric authentication is not available on this device.';
         } else if (errorStr.contains('locked')) {
           errorMessage = 'Too many failed attempts. Please try again later or sign in with your credentials.';
         }
@@ -655,7 +655,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
-                            onPressed: _isBiometricLoading ? null : _signInWithBiometric,
+                            onPressed: (_isBiometricLoading || _isLoading) ? null : _signInWithBiometric,
                             icon: _isBiometricLoading
                                 ? const SizedBox(
                                     height: 20,
