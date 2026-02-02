@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:developer' as developer;
 
 /// Service for managing registered devices
 class DeviceService {
@@ -24,6 +25,7 @@ class DeviceService {
     if (deviceId == null) {
       deviceId = _uuid.v4();
       await _storage.write(key: _deviceIdKey, value: deviceId);
+      developer.log('[DEVICE] Created new device ID: $deviceId');
     }
     return deviceId;
   }
@@ -33,37 +35,42 @@ class DeviceService {
     return await _storage.read(key: _deviceIdKey);
   }
 
-  /// Get device information
+  /// Get device information (simplified without device_info_plus)
   Future<DeviceInfo> getDeviceInfo() async {
-    // In a production app, use device_info_plus package for actual device info
-    // For now, using simplified version
     final deviceId = await getOrCreateDeviceId();
-    
+
+    String deviceName;
+    String platform;
+    String deviceModel;
+    String osVersion;
+
     if (Platform.isIOS) {
-      return DeviceInfo(
-        deviceId: deviceId,
-        deviceName: 'iPhone', // Would use DeviceInfoPlugin to get actual model
-        platform: 'ios',
-        deviceModel: 'iPhone',
-        osVersion: Platform.operatingSystemVersion,
-      );
+      deviceName = 'iPhone';
+      platform = 'ios';
+      deviceModel = 'iPhone';
+      osVersion = 'iOS';
+      developer.log('[DEVICE] iOS Device detected');
     } else if (Platform.isAndroid) {
-      return DeviceInfo(
-        deviceId: deviceId,
-        deviceName: 'Android Device',
-        platform: 'android',
-        deviceModel: 'Android',
-        osVersion: Platform.operatingSystemVersion,
-      );
+      deviceName = 'Android Device';
+      platform = 'android';
+      deviceModel = 'Android';
+      osVersion = 'Android';
+      developer.log('[DEVICE] Android Device detected');
     } else {
-      return DeviceInfo(
-        deviceId: deviceId,
-        deviceName: 'Unknown Device',
-        platform: 'web',
-        deviceModel: 'Unknown',
-        osVersion: 'Unknown',
-      );
+      deviceName = 'Web Browser';
+      platform = 'web';
+      deviceModel = 'Web';
+      osVersion = 'Unknown';
+      developer.log('[DEVICE] Web Browser detected');
     }
+
+    return DeviceInfo(
+      deviceId: deviceId,
+      deviceName: deviceName,
+      platform: platform,
+      deviceModel: deviceModel,
+      osVersion: osVersion,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -84,10 +91,20 @@ class DeviceService {
 
       final deviceInfo = await getDeviceInfo();
 
+      // Ensure device name is never null or empty
+      final deviceName = deviceInfo.deviceName.trim().isEmpty
+          ? 'Unknown Device'
+          : deviceInfo.deviceName;
+
+      developer.log('[DEVICE] Registering device: $deviceName for user: $userId');
+      developer.log('[DEVICE] Device ID: ${deviceInfo.deviceId}');
+      developer.log('[DEVICE] Platform: ${deviceInfo.platform}');
+      developer.log('[DEVICE] Biometric Enabled: $biometricEnabled');
+
       final data = {
         'user_id': userId,
         'device_id': deviceInfo.deviceId,
-        'device_name': deviceInfo.deviceName,
+        'device_name': deviceName,
         'platform': deviceInfo.platform,
         'device_model': deviceInfo.deviceModel,
         'os_version': deviceInfo.osVersion,
@@ -102,16 +119,23 @@ class DeviceService {
         data['token_fingerprint'] = tokenFingerprint;
       }
 
+      developer.log('[DEVICE] Inserting/updating device in database...');
+      developer.log('[DEVICE] Data to insert: $data');
+
       final response = await _supabase
           .from('registered_devices')
           .upsert(data)
           .select()
           .single();
 
+      developer.log('[DEVICE] Device registered successfully');
+
       return RegisteredDevice.fromJson(response);
     } on PostgrestException catch (e) {
+      developer.log('[DEVICE] PostgrestException: ${e.message}, code: ${e.code}, details: ${e.details}', error: e);
       throw DeviceException('Failed to register device: ${e.message}');
     } catch (e) {
+      developer.log('[DEVICE] Error registering device: $e', error: e);
       throw DeviceException('Failed to register device: $e');
     }
   }
@@ -135,6 +159,7 @@ class DeviceService {
 
       return response != null;
     } catch (e) {
+      developer.log('[DEVICE] Error checking if device registered: $e');
       return false;
     }
   }
@@ -160,8 +185,10 @@ class DeviceService {
 
       return RegisteredDevice.fromJson(response);
     } on PostgrestException catch (e) {
+      developer.log('[DEVICE] Error getting current device: ${e.message}', error: e);
       throw DeviceException('Failed to get current device: ${e.message}');
     } catch (e) {
+      developer.log('[DEVICE] Error getting current device: $e', error: e);
       throw DeviceException('Failed to get current device: $e');
     }
   }
@@ -210,13 +237,7 @@ class DeviceService {
           .eq('user_id', userId)
           .eq('device_id', deviceId);
     } catch (e) {
-      // Silently fail - this is a tracking operation
-      // In production, use proper logging framework
-      // ignore: avoid_print
-      assert(() {
-        print('Failed to update device last used: $e');
-        return true;
-      }());
+      developer.log('[DEVICE] Failed to update device last used: $e');
     }
   }
 
@@ -232,6 +253,8 @@ class DeviceService {
         'revoked': true,
         'revoked_at': DateTime.now().toIso8601String(),
       }).eq('user_id', userId).eq('device_id', deviceId);
+
+      developer.log('[DEVICE] Device revoked: $deviceId');
     } on PostgrestException catch (e) {
       throw DeviceException('Failed to revoke device: ${e.message}');
     } catch (e) {
@@ -252,6 +275,8 @@ class DeviceService {
           .delete()
           .eq('user_id', userId)
           .eq('device_id', deviceId);
+
+      developer.log('[DEVICE] Device deleted: $deviceId');
     } on PostgrestException catch (e) {
       throw DeviceException('Failed to delete device: ${e.message}');
     } catch (e) {
@@ -277,6 +302,8 @@ class DeviceService {
           .update({'biometric_enabled': enabled})
           .eq('user_id', userId)
           .eq('device_id', deviceId);
+
+      developer.log('[DEVICE] Biometric status updated: $enabled');
     } on PostgrestException catch (e) {
       throw DeviceException('Failed to update biometric status: ${e.message}');
     } catch (e) {
@@ -378,8 +405,6 @@ class RegisteredDevice {
     };
   }
 
-  /// Check if this is the current device
-  /// Note: This requires comparing with the stored device ID from SecureStorageService
   Future<bool> isCurrentDeviceAsync() async {
     try {
       final storage = const FlutterSecureStorage();
@@ -421,7 +446,6 @@ class RegisteredDevice {
   }
 }
 
-/// Custom exception for device errors
 class DeviceException implements Exception {
   final String message;
   DeviceException(this.message);
