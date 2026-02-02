@@ -54,8 +54,20 @@ final biometricTypeNameProvider = FutureProvider<String>((ref) async {
 });
 
 /// Provider for checking if biometric is enabled on this device
+/// Uses SSOT (Single Source of Truth) - checks both backend and local storage
 final biometricEnabledProvider = FutureProvider<bool>((ref) async {
-  return await SecureStorageService.instance.isBiometricEnabled();
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) {
+    print('[BIO] No user session - biometric not enabled');
+    return false;
+  }
+  
+  // Use AuthController's SSOT method
+  final authController = AuthController.instance;
+  final isEnabled = await authController.isBiometricAlreadyEnabled(user.id);
+  
+  print('[BIO] Provider check result: isEnabled = $isEnabled');
+  return isEnabled;
 });
 
 /// Provider for KYC status

@@ -92,6 +92,7 @@ class AuthController {
   /// This implements the EXACT pattern from the problem statement
   Future<void> _triggerBiometricSetupIfRequired() async {
     _log('[BIO] Starting biometric setup');
+    _log('[BIO] Mode = SETUP');
     
     final session = _supabase.auth.currentSession;
     if (session == null) {
@@ -170,6 +171,7 @@ class AuthController {
       );
 
       _log('[BIO] Biometric setup completed successfully');
+      _log('[BIO] ✅ Device is now biometric-enabled');
     } catch (e) {
       _log('[BIO] Failed to update device record: $e');
       // Rollback on failure
@@ -183,6 +185,7 @@ class AuthController {
   /// Called explicitly by UI when user opts in
   Future<void> forceEnableBiometric() async {
     _log('[BIO] Starting explicit biometric enrollment');
+    _log('[BIO] Mode = SETUP');
     
     // Check if biometric hardware is supported
     final isSupported = await _biometric.isDeviceSupported();
@@ -242,6 +245,7 @@ class AuthController {
         onConflict: 'user_id,device_id',
       );
       _log('[BIO] Device record updated');
+      _log('[BIO] ✅ Biometric enrollment complete - device is now biometric-enabled');
     } catch (e) {
       _log('[BIO] Failed to update device record: $e');
       // Rollback on failure
@@ -249,8 +253,6 @@ class AuthController {
       await _storage.clearSession();
       rethrow;
     }
-
-    _log('[BIO] Biometric enrollment complete');
   }
 
   /// App startup session restoration - CRITICAL FIX per spec
@@ -286,62 +288,84 @@ class AuthController {
       return SessionRestoreResult.loginRequired;
     }
 
-    // 3. Fetch device record
-    final deviceId = await _storage.getDeviceId();
-    if (deviceId == null) {
-      _log('[AUTH] No device ID - login required');
-      return SessionRestoreResult.loginRequired;
-    }
-
-    final device = await _supabase
-        .from('registered_devices')
-        .select()
-        .eq('user_id', session.user.id)
-        .eq('device_id', deviceId)
-        .maybeSingle();
-
-    // 4. Check if revoked
-    if (device == null || device['revoked'] == true) {
-      _log('[AUTH] Device revoked - wiping tokens');
-      await _storage.clearSession();
-      await _storage.setBiometricEnabled(false);
-      return SessionRestoreResult.loginRequired;
-    }
-
-    // 5. If biometric enabled → require biometric
-    final biometricEnabled = device['biometric_enabled'] == true;
+    // 3. Check if biometric is enabled using SSOT
+    final biometricEnabled = await isBiometricAlreadyEnabled(session.user.id);
+    
     if (biometricEnabled) {
-      _log('[AUTH] Biometric required for unlock');
+      _log('[BIO] Mode = UNLOCK');
+      _log('[BIO] Biometric required for unlock');
+      
       final authenticated = await _biometric.authenticate(
         reason: 'Authenticate to access CareSync',
       );
       
       if (!authenticated) {
-        _log('[AUTH] Biometric authentication failed');
+        _log('[BIO] Biometric authentication failed');
         return SessionRestoreResult.biometricFailed;
       }
-    }
-
-    // 6. Validate token fingerprint
-    final storedFingerprint = device['token_fingerprint'] as String?;
-    if (storedFingerprint != null) {
-      final currentFingerprint = _generateTokenFingerprint(
-        session.accessToken,
-        deviceId,
-      );
       
-      if (storedFingerprint != currentFingerprint) {
-        _log('[AUTH] Token fingerprint mismatch - security breach detected');
-        await _storage.clearSession();
-        await _storage.setBiometricEnabled(false);
-        return SessionRestoreResult.loginRequired;
-      }
+      _log('[BIO] Fingerprint success');
+      _log('[BIO] Session restored');
+    } else {
+      _log('[BIO] Mode = SETUP (or not required)');
+      _log('[AUTH] Session restored without biometric');
     }
 
     _log('[AUTH] Session restored');
     await _storage.updateLastActivity();
     
     return SessionRestoreResult.success;
+  }
+
+  /// Check if biometric is already enabled for this device (SSOT - Single Source of Truth)
+  /// This is THE authoritative check per spec requirements
+  /// Returns true ONLY if ALL conditions are met:
+  /// 1. Secure storage contains tokens
+  /// 2. Backend device record has biometric_enabled = true
+  /// 3. Device is NOT revoked
+  Future<bool> isBiometricAlreadyEnabled(String userId) async {
+    _log('[BIO] Checking if biometric already enabled (SSOT)');
+    
+    // 1. Check device ID exists
+    final deviceId = await _storage.getDeviceId();
+    if (deviceId == null) {
+      _log('[BIO] No device ID - biometric not enabled');
+      return false;
+    }
+    
+    // 2. Check tokens exist in secure storage
+    final hasToken = await _storage.getAccessToken() != null;
+    if (!hasToken) {
+      _log('[BIO] No tokens in storage - biometric not enabled');
+      return false;
+    }
+    
+    // 3. Query backend for device record
+    final device = await _supabase
+        .from('registered_devices')
+        .select('biometric_enabled, revoked')
+        .eq('user_id', userId)
+        .eq('device_id', deviceId)
+        .maybeSingle();
+    
+    // 4. Validate device record
+    if (device == null) {
+      _log('[BIO] No device record - biometric not enabled');
+      return false;
+    }
+    
+    if (device['revoked'] == true) {
+      _log('[BIO] Device revoked - biometric not enabled');
+      return false;
+    }
+    
+    if (device['biometric_enabled'] != true) {
+      _log('[BIO] Backend shows biometric_enabled=false - biometric not enabled');
+      return false;
+    }
+    
+    _log('[BIO] ✅ Biometric IS enabled (all checks passed)');
+    return true;
   }
 
   /// Helper method to log with [AUTH] prefix as required
