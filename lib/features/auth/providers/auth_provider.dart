@@ -303,24 +303,47 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }
 
   /// Sign in with biometrics (for returning users on enrolled devices)
+  /// This is BIOMETRIC UNLOCK MODE ONLY - never does setup
   Future<bool> signInWithBiometric() async {
     try {
+      print('[BIO] Starting biometric unlock login');
+      print('[BIO] Mode = UNLOCK');
+      
+      // Get current user ID from storage to check if biometric is enabled
+      final userId = await _storage.getUserId();
+      if (userId == null) {
+        print('[BIO] No user ID in storage - cannot use biometric unlock');
+        return false;
+      }
+      
+      // CRITICAL: Check if biometric is ACTUALLY enabled using SSOT
+      final isEnabled = await _authController.isBiometricAlreadyEnabled(userId);
+      if (!isEnabled) {
+        print('[BIO] Biometric not enabled per SSOT - cannot unlock');
+        return false;
+      }
+      
+      print('[BIO] Biometric is enabled - proceeding with unlock');
+      
       // Check if session has timed out
       final hasTimedOut = await _storage.hasSessionTimedOut();
       if (hasTimedOut) {
+        print('[BIO] Session timed out - requires fresh login');
         return false;
       }
 
-      // Check if biometric is enabled
-      final isEnabled = await _storage.isBiometricEnabled();
-      if (!isEnabled) return false;
-
       // Verify biometric
+      print('[BIO] Triggering authenticate()');
       final authenticated = await _biometric.authenticate(
         reason: 'Authenticate to sign in to CareSync',
       );
 
-      if (!authenticated) return false;
+      if (!authenticated) {
+        print('[BIO] Biometric authentication failed');
+        return false;
+      }
+
+      print('[BIO] Fingerprint success');
 
       // Try to restore session from stored tokens
       final accessToken = await _storage.getAccessToken();
@@ -331,12 +354,18 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
           // Use recoverSession with both tokens
           final response = await _supabase.auth.recoverSession(refreshToken);
           if (response.session == null) {
+            print('[BIO] Session recovery failed');
             return false;
           }
+          print('[BIO] Session restored');
         } catch (e) {
           // Token expired or invalid
+          print('[BIO] Session recovery error: $e');
           return false;
         }
+      } else {
+        print('[BIO] No tokens found');
+        return false;
       }
 
       // Update device last used
@@ -349,8 +378,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       // Update last activity
       await _storage.updateLastActivity();
 
+      print('[BIO] ✅ Biometric unlock successful');
       return true;
     } catch (e) {
+      print('[BIO] Biometric unlock error: $e');
       return false;
     }
   }
