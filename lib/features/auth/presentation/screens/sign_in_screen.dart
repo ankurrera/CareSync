@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
+import '../../../../services/two_factor_service.dart';
 import '../../providers/auth_provider.dart';
 import '../widgets/auth_text_field.dart';
+import 'two_factor_verification_screen.dart';
 
 class SignInScreen extends ConsumerStatefulWidget {
   final String role;
@@ -76,7 +78,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authNotifierProvider.notifier).signIn(
+      final result = await ref.read(authNotifierProvider.notifier).signIn(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
@@ -102,7 +104,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           return;
         }
 
-        if (mounted) {
+        // Check if 2FA is required (new device)
+        if (result.requiresTwoFactor && mounted) {
+          await _show2FADialog(result);
+        } else if (mounted) {
           // Check if biometric is enabled, if not prompt for enrollment
           final biometricEnabled = await ref.read(biometricEnabledProvider.future);
           if (!biometricEnabled) {
@@ -124,6 +129,90 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _show2FADialog(SignInResult result) async {
+    // Show dialog to choose 2FA method
+    final method = await showDialog<TwoFactorCodeType>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Two-Factor Authentication'),
+        content: const Text(
+          'This is a new device. Please verify your identity using a verification code.',
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.pop(context, TwoFactorCodeType.email),
+            icon: const Icon(Icons.email),
+            label: const Text('Email Code'),
+          ),
+          // SMS option can be added here if phone number is available
+        ],
+      ),
+    );
+
+    if (method != null && mounted) {
+      // Navigate to 2FA verification screen
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TwoFactorVerificationScreen(
+            userId: result.user!.id,
+            email: result.email ?? _emailController.text.trim(),
+            codeType: method,
+            onVerified: () async {
+              // After 2FA is verified, get profile and complete setup
+              final profile = await ref.read(currentProfileProvider.future);
+              if (profile != null && mounted) {
+                await _complete2FASetup(profile.role);
+              }
+            },
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _complete2FASetup(String userRole) async {
+    if (!mounted) return;
+
+    // Ask if user wants to enable biometric
+    final enableBiometric = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enable Biometric Login?'),
+        content: const Text(
+          'Would you like to enable biometric login (fingerprint/Face ID) for quick access on this device?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Skip'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+
+    if (mounted) {
+      // Complete 2FA and register device
+      await ref.read(authNotifierProvider.notifier).completeTwoFactor(
+            registerDevice: true,
+            enableBiometric: enableBiometric ?? false,
+          );
+
+      if (mounted) {
+        _navigateToDashboard(userRole);
+      }
     }
   }
 

@@ -22,6 +22,8 @@ class SecureStorageService {
   static const String _userIdKey = 'caresync_user_id';
   static const String _biometricEnabledKey = 'caresync_biometric_enabled';
   static const String _refreshTokenKey = 'caresync_refresh_token';
+  static const String _accessTokenKey = 'caresync_access_token';
+  static const String _lastActivityKey = 'caresync_last_activity';
 
   // ─────────────────────────────────────────────────────────────────────────
   // DEVICE ID (Biometric Binding)
@@ -67,6 +69,16 @@ class SecureStorageService {
     return await _storage.read(key: _refreshTokenKey);
   }
 
+  /// Store access token for session persistence
+  Future<void> setAccessToken(String token) async {
+    await _storage.write(key: _accessTokenKey, value: token);
+  }
+
+  /// Get stored access token
+  Future<String?> getAccessToken() async {
+    return await _storage.read(key: _accessTokenKey);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // BIOMETRIC SETTINGS
   // ─────────────────────────────────────────────────────────────────────────
@@ -86,6 +98,35 @@ class SecureStorageService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // SESSION TIMEOUT
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Update last activity timestamp
+  Future<void> updateLastActivity() async {
+    await _storage.write(
+      key: _lastActivityKey,
+      value: DateTime.now().millisecondsSinceEpoch.toString(),
+    );
+  }
+
+  /// Get last activity timestamp
+  Future<DateTime?> getLastActivity() async {
+    final value = await _storage.read(key: _lastActivityKey);
+    if (value == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(int.parse(value));
+  }
+
+  /// Check if session has timed out (15 minutes of inactivity)
+  Future<bool> hasSessionTimedOut() async {
+    final lastActivity = await getLastActivity();
+    if (lastActivity == null) return true;
+
+    final now = DateTime.now();
+    final difference = now.difference(lastActivity);
+    return difference.inMinutes > 15; // 15 minutes timeout
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // CLEAR DATA
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -94,13 +135,17 @@ class SecureStorageService {
     await _storage.delete(key: _userIdKey);
     await _storage.delete(key: _biometricEnabledKey);
     await _storage.delete(key: _refreshTokenKey);
+    await _storage.delete(key: _accessTokenKey);
+    await _storage.delete(key: _lastActivityKey);
     // Note: We don't delete deviceId - it persists across logins
   }
 
-  /// Clear only session data (keeps device ID)
+  /// Clear only session data (keeps device ID and biometric settings)
   Future<void> clearSession() async {
     await _storage.delete(key: _userIdKey);
     await _storage.delete(key: _refreshTokenKey);
+    await _storage.delete(key: _accessTokenKey);
+    await _storage.delete(key: _lastActivityKey);
   }
 }
 

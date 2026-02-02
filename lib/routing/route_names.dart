@@ -6,6 +6,9 @@ abstract class RouteNames {
   static const String signIn = '/sign-in';
   static const String signUp = '/sign-up';
   static const String biometricEnrollment = '/biometric-enrollment';
+  static const String kycVerification = '/kyc-verification';
+  static const String twoFactorVerification = '/two-factor-verification';
+  static const String deviceManagement = '/device-management';
 
   // Common/Shared
   static const String profile = '/profile';
