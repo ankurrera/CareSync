@@ -7,9 +7,9 @@ class AuditService {
 
   final _supabase = Supabase.instance.client;
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   // AUDIT LOGGING
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
 
   /// Log an action to the audit trail
   Future<void> logAction({
@@ -136,9 +136,9 @@ class AuditService {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
   // AUDIT RETRIEVAL
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────
 
   /// Get audit logs for current user
   Future<List<AuditLog>> getUserAuditLogs({
@@ -149,18 +149,18 @@ class AuditService {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return [];
 
-      var query = _supabase
-          .from('audit_log')
-          .select()
-          .eq('user_id', userId)
+      // Build base query
+      final baseQuery = _supabase.from('audit_log').select().eq('user_id', userId);
+
+      // Build the complete query chain based on whether we have a filter
+      final response = actionFilter != null
+          ? await baseQuery
+          .eq('action', actionFilter.name)
+          .order('timestamp', ascending: false)
+          .limit(limit)
+          : await baseQuery
           .order('timestamp', ascending: false)
           .limit(limit);
-
-      if (actionFilter != null) {
-        query = query.eq('action', actionFilter.name);
-      }
-
-      final response = await query;
 
       return (response as List)
           .map((json) => AuditLog.fromJson(json))
@@ -195,9 +195,9 @@ class AuditService {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // ENUMS
-// ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 enum AuditAction {
   login,
@@ -219,15 +219,15 @@ enum AuditAction {
 
   static AuditAction fromString(String action) {
     return AuditAction.values.firstWhere(
-      (e) => e.name == action,
+          (e) => e.name == action,
       orElse: () => AuditAction.login,
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // MODELS
-// ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 
 class AuditLog {
   final String id;
