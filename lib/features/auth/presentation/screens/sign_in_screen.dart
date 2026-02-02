@@ -106,7 +106,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
         // Check if 2FA is required (new device)
         if (result.requiresTwoFactor && mounted) {
-          await _show2FADialog(result, profile.role);
+          await _show2FADialog(result);
         } else if (mounted) {
           // Check if biometric is enabled, if not prompt for enrollment
           final biometricEnabled = await ref.read(biometricEnabledProvider.future);
@@ -132,7 +132,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     }
   }
 
-  Future<void> _show2FADialog(SignInResult result, String userRole) async {
+  Future<void> _show2FADialog(SignInResult result) async {
     // Show dialog to choose 2FA method
     final method = await showDialog<TwoFactorCodeType>(
       context: context,
@@ -163,8 +163,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             email: result.email ?? _emailController.text.trim(),
             codeType: method,
             onVerified: () async {
-              // After 2FA is verified, register device and enable biometric
-              await _complete2FASetup(userRole);
+              // After 2FA is verified, get profile and complete setup
+              final profile = await ref.read(currentProfileProvider.future);
+              if (profile != null && mounted) {
+                await _complete2FASetup(profile.role);
+              }
             },
           ),
         ),

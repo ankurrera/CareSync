@@ -37,7 +37,12 @@ class AuditService {
       });
     } catch (e) {
       // Silently fail - audit logging should not break the main flow
-      print('Failed to log audit action: $e');
+      // In production, use proper logging framework
+      // ignore: avoid_print
+      assert(() {
+        print('Failed to log audit action: $e');
+        return true;
+      }());
     }
   }
 

@@ -18,7 +18,7 @@ class TwoFactorService {
   /// Generate a random 6-digit code
   String _generateCode() {
     final random = Random.secure();
-    final code = random.nextInt(999999).toString().padLeft(_codeLength, '0');
+    final code = random.nextInt(1000000).toString().padLeft(_codeLength, '0');
     return code;
   }
 
@@ -67,8 +67,12 @@ class TwoFactorService {
     // 3. AWS SES
     // 4. Direct SMTP
     
-    // For development, log the code
-    print('📧 2FA Code for $email: $code');
+    // For development, log the code (REMOVE IN PRODUCTION)
+    // ignore: avoid_print
+    assert(() {
+      print('📧 2FA Code for $email: $code');
+      return true;
+    }());
     
     // In production, call your email service:
     // await _supabase.functions.invoke('send-2fa-email', body: {
@@ -120,8 +124,12 @@ class TwoFactorService {
     // 3. Firebase Cloud Messaging
     // 4. Vonage (Nexmo)
     
-    // For development, log the code
-    print('📱 2FA Code for $phoneNumber: $code');
+    // For development, log the code (REMOVE IN PRODUCTION)
+    // ignore: avoid_print
+    assert(() {
+      print('📱 2FA Code for $phoneNumber: $code');
+      return true;
+    }());
     
     // In production, call your SMS service:
     // await _supabase.functions.invoke('send-2fa-sms', body: {
@@ -229,7 +237,12 @@ class TwoFactorService {
           .lt('expires_at', oneHourAgo.toIso8601String());
     } catch (e) {
       // Silently fail - this is a cleanup operation
-      print('Failed to cleanup expired codes: $e');
+      // In production, use proper logging framework
+      // ignore: avoid_print
+      assert(() {
+        print('Failed to cleanup expired codes: $e');
+        return true;
+      }());
     }
   }
 

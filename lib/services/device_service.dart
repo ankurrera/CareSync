@@ -204,7 +204,12 @@ class DeviceService {
           .eq('device_id', deviceId);
     } catch (e) {
       // Silently fail - this is a tracking operation
-      print('Failed to update device last used: $e');
+      // In production, use proper logging framework
+      // ignore: avoid_print
+      assert(() {
+        print('Failed to update device last used: $e');
+        return true;
+      }());
     }
   }
 
@@ -358,10 +363,16 @@ class RegisteredDevice {
     };
   }
 
-  bool get isCurrentDevice {
-    // Check if this is the current device (would need to compare with stored device ID)
-    // For now, return false as a placeholder
-    return false;
+  /// Check if this is the current device
+  /// Note: This requires comparing with the stored device ID from SecureStorageService
+  Future<bool> isCurrentDeviceAsync() async {
+    try {
+      final storage = const FlutterSecureStorage();
+      final currentDeviceId = await storage.read(key: 'caresync_device_id');
+      return currentDeviceId == deviceId;
+    } catch (e) {
+      return false;
+    }
   }
 
   String get platformIcon {

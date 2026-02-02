@@ -100,12 +100,17 @@ CREATE INDEX idx_audit_log_action ON audit_log(action);
 -- ============================================================================
 -- STORAGE BUCKET FOR KYC DOCUMENTS
 -- ============================================================================
--- Note: Run this in Supabase dashboard or CLI
--- This creates a private bucket for KYC documents
-
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('kyc-documents', 'kyc-documents', false)
-ON CONFLICT (id) DO NOTHING;
+-- Note: Create this bucket manually in Supabase dashboard:
+-- 1. Go to Storage in Supabase dashboard
+-- 2. Click "Create a new bucket"
+-- 3. Set name to "kyc-documents"
+-- 4. Uncheck "Public bucket" (keep it private)
+-- 5. Click "Create bucket"
+--
+-- Alternative: Use Supabase CLI:
+-- supabase storage create kyc-documents --private
+--
+-- SQL insert may not work in all Supabase environments
 
 -- ============================================================================
 -- ROW LEVEL SECURITY POLICIES

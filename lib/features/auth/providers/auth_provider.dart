@@ -259,7 +259,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
       if (accessToken != null && refreshToken != null) {
         try {
-          await _supabase.auth.setSession(refreshToken);
+          // Use recoverSession with both tokens
+          final response = await _supabase.auth.recoverSession(refreshToken);
+          if (response.session == null) {
+            return false;
+          }
         } catch (e) {
           // Token expired or invalid
           return false;
