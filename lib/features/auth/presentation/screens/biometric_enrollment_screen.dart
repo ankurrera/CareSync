@@ -26,6 +26,22 @@ class _BiometricEnrollmentScreenState
   bool _isLoading = false;
   bool _isEnrolling = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // Trigger biometric setup at the right lifecycle moment
+    if (widget.isMandatory) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndEnrollBiometric();
+      });
+    }
+  }
+
+  Future<void> _checkAndEnrollBiometric() async {
+    print('[BIO] Auto-triggering biometric setup (mandatory)');
+    await _enrollBiometric();
+  }
+
   Future<void> _enrollBiometric() async {
     setState(() {
       _isLoading = true;
@@ -33,11 +49,29 @@ class _BiometricEnrollmentScreenState
     });
 
     try {
-      // KYC check is handled in AuthController for mandatory enrollments
-      // For optional enrollments from profile, check KYC first
+      print('[BIO] Starting enrollment');
+      
+      // KYC check - use robust method
       if (!widget.isMandatory) {
-        final kycStatus = await ref.read(kycStatusProvider.future);
-        if (kycStatus == null || kycStatus.status != KYCStatus.verified) {
+        print('[BIO] Checking KYC status (optional enrollment)');
+        final session = ref.read(authStateProvider).valueOrNull;
+        if (session == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Session expired. Please sign in again.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          return;
+        }
+        
+        final kycService = KYCService.instance;
+        final kycVerified = await kycService.isKYCVerified(session.id);
+        print('[BIO] KYC verified = $kycVerified');
+        
+        if (!kycVerified) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -51,8 +85,11 @@ class _BiometricEnrollmentScreenState
         }
       }
 
+      print('[BIO] Calling enrollBiometric()');
       await ref.read(authNotifierProvider.notifier).enrollBiometric();
 
+      print('[BIO] Enrollment successful');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -63,10 +100,11 @@ class _BiometricEnrollmentScreenState
         _navigateToDashboard();
       }
     } catch (e) {
+      print('[BIO] Enrollment failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(_extractErrorMessage(e)),
             backgroundColor: AppColors.error,
           ),
         );
@@ -83,6 +121,21 @@ class _BiometricEnrollmentScreenState
 
   void _skipBiometric() {
     _navigateToDashboard();
+  }
+
+  /// Extract user-friendly error message from exception
+  String _extractErrorMessage(Object error) {
+    String errorMessage = error.toString();
+    
+    // Remove common exception prefixes
+    final prefixes = ['Exception: ', 'AuthException: ', 'BiometricException: '];
+    for (final prefix in prefixes) {
+      if (errorMessage.startsWith(prefix)) {
+        return errorMessage.substring(prefix.length);
+      }
+    }
+    
+    return errorMessage;
   }
 
   void _navigateToDashboard() {

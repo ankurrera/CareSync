@@ -114,7 +114,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           context.go(RouteNames.kycVerification);
         } else if (result.requiresBiometric && mounted) {
           // Biometric enrollment required - MANDATORY per spec
-          context.go(RouteNames.biometricEnrollment, extra: true);
+          // Use addPostFrameCallback to ensure navigation completes
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              context.go(RouteNames.biometricEnrollment, extra: true);
+            }
+          });
         } else if (mounted) {
           // All requirements met - navigate to dashboard
           _navigateToDashboard(profile.role);
