@@ -6,6 +6,8 @@ import '../features/auth/presentation/screens/role_selection_screen.dart';
 import '../features/auth/presentation/screens/sign_in_screen.dart';
 import '../features/auth/presentation/screens/sign_up_screen.dart';
 import '../features/auth/presentation/screens/biometric_enrollment_screen.dart';
+import '../features/auth/presentation/screens/kyc_verification_screen.dart';
+import '../features/auth/presentation/screens/device_management_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/patient/presentation/screens/patient_dashboard_screen.dart';
 import '../features/patient/presentation/screens/patient_new_prescription_screen.dart';
@@ -49,7 +51,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Not authenticated - redirect to role selection (unless already on auth route)
       if (!isAuthenticated && !isAuthRoute && !isSplash) {
-        return RouteNames.roleSelection;
+        // Allow KYC and device management screens without auth
+        final isKYCRoute = state.matchedLocation == RouteNames.kycVerification;
+        final isDeviceRoute = state.matchedLocation == RouteNames.deviceManagement;
+        
+        if (!isKYCRoute && !isDeviceRoute) {
+          return RouteNames.roleSelection;
+        }
       }
 
       // Authenticated but on auth route - redirect to appropriate dashboard
@@ -63,7 +71,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         final expectedPrefix = _rolePrefix(profile.role);
         final isCommonRoute = path == RouteNames.profile ||
             path == RouteNames.notifications ||
-            path == RouteNames.biometricEnrollment;
+            path == RouteNames.biometricEnrollment ||
+            path == RouteNames.kycVerification ||
+            path == RouteNames.deviceManagement;
 
         if (!isCommonRoute &&
             expectedPrefix != null &&
@@ -108,6 +118,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.biometricEnrollment,
         name: 'biometricEnrollment',
         builder: (context, state) => const BiometricEnrollmentScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.kycVerification,
+        name: 'kycVerification',
+        builder: (context, state) => const KYCVerificationScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.deviceManagement,
+        name: 'deviceManagement',
+        builder: (context, state) => const DeviceManagementScreen(),
       ),
 
       // Common Routes
