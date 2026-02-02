@@ -185,9 +185,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
       // Device is registered - now check KYC and biometric requirements
       print('[AUTH] Checking KYC status');
-      final kyc = await _kycService.getKYCStatus();
+      final kycVerified = await _kycService.isKYCVerified(userId);
       
-      if (kyc == null || kyc.status != KYCStatus.verified) {
+      if (!kycVerified) {
         print('[AUTH] KYC not verified');
         state = AsyncValue.data(response.user);
         return SignInResult(
@@ -217,8 +217,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
           throw Exception('Device has been revoked');
         }
 
-        // Check if biometric needs to be enabled
-        if (device == null || device['biometric_enabled'] != true) {
+        // Check if biometric needs to be enabled using helper
+        if (_needsBiometricSetup(device)) {
           print('[AUTH] Biometric required');
           state = AsyncValue.data(response.user);
           return SignInResult(
@@ -357,6 +357,14 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     } catch (e) {
       rethrow;
     }
+  }
+
+  /// Helper to determine if biometric setup is needed per spec
+  bool _needsBiometricSetup(Map<String, dynamic>? device) {
+    if (device == null) return true;
+    if (device['revoked'] == true) return true;
+    if (device['biometric_enabled'] != true) return true;
+    return false;
   }
 
   /// Sign out

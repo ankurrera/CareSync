@@ -143,9 +143,27 @@ class KYCService {
   }
 
   /// Check if user has verified KYC
-  Future<bool> isKYCVerified() async {
-    final kyc = await getKYCStatus();
-    return kyc?.status == KYCStatus.verified;
+  /// ROBUST implementation per security requirements
+  Future<bool> isKYCVerified([String? userId]) async {
+    try {
+      final targetUserId = userId ?? _supabase.auth.currentUser?.id;
+      if (targetUserId == null) return false;
+
+      final res = await _supabase
+          .from('kyc_verifications')
+          .select('kyc_status')
+          .eq('user_id', targetUserId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (res == null) return false;
+
+      return res['kyc_status']?.toString().toLowerCase() == 'verified';
+    } catch (e) {
+      print('[KYC] Error checking KYC status: $e');
+      return false;
+    }
   }
 
   /// Check if user has pending KYC
