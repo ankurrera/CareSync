@@ -21,7 +21,8 @@ class AuthController {
 
   /// Generate token fingerprint for device binding
   String _generateTokenFingerprint(String accessToken, String deviceId) {
-    final bytes = utf8.encode(accessToken + deviceId);
+    // Use delimiter to prevent collision attacks
+    final bytes = utf8.encode('$accessToken|$deviceId');
     final digest = sha256.convert(bytes);
     return digest.toString();
   }
@@ -124,14 +125,17 @@ class AuthController {
 
     // 6. Backend device binding
     try {
-      await _supabase.from('registered_devices').upsert({
-        'user_id': session.user.id,
-        'device_id': deviceId,
-        'biometric_enabled': true,
-        'trusted': true,
-        'token_fingerprint': fingerprint,
-        'last_used_at': DateTime.now().toIso8601String(),
-      });
+      await _supabase.from('registered_devices').upsert(
+        {
+          'user_id': session.user.id,
+          'device_id': deviceId,
+          'biometric_enabled': true,
+          'trusted': true,
+          'token_fingerprint': fingerprint,
+          'last_used_at': DateTime.now().toIso8601String(),
+        },
+        onConflict: 'user_id,device_id',
+      );
     } catch (e) {
       // Rollback on failure
       await _storage.setBiometricEnabled(false);

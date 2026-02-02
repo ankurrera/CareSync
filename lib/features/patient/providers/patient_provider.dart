@@ -40,7 +40,7 @@ final medicalConditionsProvider =
   // Check KYC status first
   final isKycVerified = await ref.watch(isKycVerifiedProvider.future);
   if (!isKycVerified) {
-    throw Exception('KYC verification required to access medical records');
+    throw KYCRequiredException('KYC verification required to access medical records');
   }
 
   final patientData = await ref.watch(patientDataProvider.future);

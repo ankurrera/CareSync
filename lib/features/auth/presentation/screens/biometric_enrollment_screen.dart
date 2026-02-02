@@ -33,7 +33,8 @@ class _BiometricEnrollmentScreenState
     });
 
     try {
-      // Check KYC status first (unless accessed from profile settings)
+      // KYC check is handled in AuthController for mandatory enrollments
+      // For optional enrollments from profile, check KYC first
       if (!widget.isMandatory) {
         final kycStatus = await ref.read(kycStatusProvider.future);
         if (kycStatus == null || kycStatus.status != KYCStatus.verified) {
@@ -53,7 +54,6 @@ class _BiometricEnrollmentScreenState
       await ref.read(authNotifierProvider.notifier).enrollBiometric();
 
       if (mounted) {
-        // Show success and navigate
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Biometric login enabled successfully!'),

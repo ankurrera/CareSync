@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
+import '../../../../services/kyc_service.dart';
 import '../../models/patient_data.dart';
 import '../../providers/patient_provider.dart';
 
@@ -29,9 +30,8 @@ class MedicalHistoryScreen extends ConsumerWidget {
       body: conditionsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) {
-          // Check if error is due to KYC requirement
-          final errorStr = error.toString();
-          if (errorStr.contains('KYC verification required')) {
+          // Check if error is due to KYC requirement using typed exception
+          if (error is KYCRequiredException) {
             return Center(
               child: Padding(
                 padding: AppSpacing.screenPadding,
