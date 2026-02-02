@@ -58,7 +58,7 @@ final biometricTypeNameProvider = FutureProvider<String>((ref) async {
 final biometricEnabledProvider = FutureProvider<bool>((ref) async {
   final user = ref.watch(authStateProvider).valueOrNull;
   if (user == null) {
-    print('[BIO] No user session - biometric not enabled');
+    _log('[BIO] No user session - biometric not enabled');
     return false;
   }
   
@@ -66,9 +66,16 @@ final biometricEnabledProvider = FutureProvider<bool>((ref) async {
   final authController = AuthController.instance;
   final isEnabled = await authController.isBiometricAlreadyEnabled(user.id);
   
-  print('[BIO] Provider check result: isEnabled = $isEnabled');
+  _log('[BIO] Provider check result: isEnabled = $isEnabled');
   return isEnabled;
 });
+
+/// Consistent logging function matching auth_controller.dart
+void _log(String message) {
+  // In production, use proper logging framework
+  // ignore: avoid_print
+  print(message);
+}
 
 /// Provider for KYC status
 final kycStatusProvider = FutureProvider<KYCVerification?>((ref) async {
@@ -157,7 +164,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }) async {
     state = const AsyncValue.loading();
     try {
-      print('[AUTH] Sign in attempt for: $email');
+      _log('[AUTH] Sign in attempt for: $email');
       
       final response = await _supabase.signIn(
         email: email,
@@ -168,7 +175,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         throw Exception('Invalid credentials');
       }
 
-      print('[AUTH] Login success');
+      _log('[AUTH] Login success');
       final userId = response.user!.id;
 
       // Store tokens for session persistence
@@ -196,11 +203,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       }
 
       // Device is registered - now check KYC and biometric requirements
-      print('[AUTH] Checking KYC status');
+      _log('[AUTH] Checking KYC status');
       final kycVerified = await _kycService.isKYCVerified(userId);
       
       if (!kycVerified) {
-        print('[AUTH] KYC not verified');
+        _log('[AUTH] KYC not verified');
         state = AsyncValue.data(response.user);
         return SignInResult(
           user: response.user,
@@ -210,7 +217,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         );
       }
 
-      print('[AUTH] KYC verified');
+      _log('[AUTH] KYC verified');
 
       // Check device biometric binding
       final deviceId = await _storage.getDeviceId();
@@ -224,14 +231,14 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 
         // Check if device is revoked
         if (device != null && device['revoked'] == true) {
-          print('[AUTH] Device revoked');
+          _log('[AUTH] Device revoked');
           await _storage.clearSession();
           throw Exception('Device has been revoked');
         }
 
         // Check if biometric needs to be enabled using helper
         if (_needsBiometricSetup(device)) {
-          print('[AUTH] Biometric required');
+          _log('[AUTH] Biometric required');
           state = AsyncValue.data(response.user);
           return SignInResult(
             user: response.user,
@@ -241,7 +248,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
           );
         }
 
-        print('[AUTH] Device trusted');
+        _log('[AUTH] Device trusted');
       }
 
       // Update device last used
@@ -306,44 +313,44 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   /// This is BIOMETRIC UNLOCK MODE ONLY - never does setup
   Future<bool> signInWithBiometric() async {
     try {
-      print('[BIO] Starting biometric unlock login');
-      print('[BIO] Mode = UNLOCK');
+      _log('[BIO] Starting biometric unlock login');
+      _log('[BIO] Mode = UNLOCK');
       
       // Get current user ID from storage to check if biometric is enabled
       final userId = await _storage.getUserId();
       if (userId == null) {
-        print('[BIO] No user ID in storage - cannot use biometric unlock');
+        _log('[BIO] No user ID in storage - cannot use biometric unlock');
         return false;
       }
       
       // CRITICAL: Check if biometric is ACTUALLY enabled using SSOT
       final isEnabled = await _authController.isBiometricAlreadyEnabled(userId);
       if (!isEnabled) {
-        print('[BIO] Biometric not enabled per SSOT - cannot unlock');
+        _log('[BIO] Biometric not enabled per SSOT - cannot unlock');
         return false;
       }
       
-      print('[BIO] Biometric is enabled - proceeding with unlock');
+      _log('[BIO] Biometric is enabled - proceeding with unlock');
       
       // Check if session has timed out
       final hasTimedOut = await _storage.hasSessionTimedOut();
       if (hasTimedOut) {
-        print('[BIO] Session timed out - requires fresh login');
+        _log('[BIO] Session timed out - requires fresh login');
         return false;
       }
 
       // Verify biometric
-      print('[BIO] Triggering authenticate()');
+      _log('[BIO] Triggering authenticate()');
       final authenticated = await _biometric.authenticate(
         reason: 'Authenticate to sign in to CareSync',
       );
 
       if (!authenticated) {
-        print('[BIO] Biometric authentication failed');
+        _log('[BIO] Biometric authentication failed');
         return false;
       }
 
-      print('[BIO] Fingerprint success');
+      _log('[BIO] Fingerprint success');
 
       // Try to restore session from stored tokens
       final accessToken = await _storage.getAccessToken();
@@ -354,17 +361,17 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
           // Use recoverSession with both tokens
           final response = await _supabase.auth.recoverSession(refreshToken);
           if (response.session == null) {
-            print('[BIO] Session recovery failed');
+            _log('[BIO] Session recovery failed');
             return false;
           }
-          print('[BIO] Session restored');
+          _log('[BIO] Session restored');
         } catch (e) {
           // Token expired or invalid
-          print('[BIO] Session recovery error: $e');
+          _log('[BIO] Session recovery error: $e');
           return false;
         }
       } else {
-        print('[BIO] No tokens found');
+        _log('[BIO] No tokens found');
         return false;
       }
 
@@ -378,10 +385,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       // Update last activity
       await _storage.updateLastActivity();
 
-      print('[BIO] ✅ Biometric unlock successful');
+      _log('[BIO] ✅ Biometric unlock successful');
       return true;
     } catch (e) {
-      print('[BIO] Biometric unlock error: $e');
+      _log('[BIO] Biometric unlock error: $e');
       return false;
     }
   }

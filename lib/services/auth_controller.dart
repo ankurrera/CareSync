@@ -288,7 +288,45 @@ class AuthController {
       return SessionRestoreResult.loginRequired;
     }
 
-    // 3. Check if biometric is enabled using SSOT
+    // 3. Fetch device record for revocation and fingerprint checks
+    final deviceId = await _storage.getDeviceId();
+    if (deviceId == null) {
+      _log('[AUTH] No device ID - login required');
+      return SessionRestoreResult.loginRequired;
+    }
+
+    final device = await _supabase
+        .from('registered_devices')
+        .select()
+        .eq('user_id', session.user.id)
+        .eq('device_id', deviceId)
+        .maybeSingle();
+
+    // 4. Check if device is revoked - CRITICAL SECURITY CHECK
+    if (device == null || device['revoked'] == true) {
+      _log('[AUTH] Device revoked - wiping tokens');
+      await _storage.clearSession();
+      await _storage.setBiometricEnabled(false);
+      return SessionRestoreResult.loginRequired;
+    }
+
+    // 5. Validate token fingerprint - PREVENTS TOKEN REPLAY ATTACKS
+    final storedFingerprint = device['token_fingerprint'] as String?;
+    if (storedFingerprint != null) {
+      final currentFingerprint = _generateTokenFingerprint(
+        session.accessToken,
+        deviceId,
+      );
+      
+      if (storedFingerprint != currentFingerprint) {
+        _log('[AUTH] Token fingerprint mismatch - security breach detected');
+        await _storage.clearSession();
+        await _storage.setBiometricEnabled(false);
+        return SessionRestoreResult.loginRequired;
+      }
+    }
+
+    // 6. Check if biometric is enabled using SSOT
     final biometricEnabled = await isBiometricAlreadyEnabled(session.user.id);
     
     if (biometricEnabled) {
