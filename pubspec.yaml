@@ -43,6 +43,7 @@ dependencies:
   url_launcher: ^6.3.1
   share_plus: ^10.1.2
   image_picker: ^1.1.2
+  crypto: ^3.0.3
   
   # Environment variables
   flutter_dotenv: ^5.2.1

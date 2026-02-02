@@ -8,7 +8,12 @@ import '../../../../routing/route_names.dart';
 import '../../providers/auth_provider.dart';
 
 class BiometricEnrollmentScreen extends ConsumerStatefulWidget {
-  const BiometricEnrollmentScreen({super.key});
+  final bool isMandatory;
+  
+  const BiometricEnrollmentScreen({
+    super.key,
+    this.isMandatory = false,
+  });
 
   @override
   ConsumerState<BiometricEnrollmentScreen> createState() =>
@@ -270,14 +275,17 @@ class _BiometricEnrollmentScreenState
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: TextButton(
-                          onPressed: _isLoading ? null : _skipBiometric,
-                          child: const Text('Skip for now'),
+                      // Only show skip button if not mandatory
+                      if (!widget.isMandatory) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: _isLoading ? null : _skipBiometric,
+                            child: const Text('Skip for now'),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   );
                 },

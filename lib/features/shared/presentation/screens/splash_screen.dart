@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../routing/route_names.dart';
+import '../../../../services/auth_controller.dart';
 import '../../../auth/providers/auth_provider.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -50,25 +51,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     if (!mounted) return;
 
-    final authState = ref.read(authStateProvider);
-    final biometricEnabled = await ref.read(biometricEnabledProvider.future);
+    // Use AuthController for session restoration
+    final authController = AuthController.instance;
+    final result = await authController.restoreSession();
 
-    if (authState.valueOrNull != null) {
-      // User is authenticated
-      if (biometricEnabled) {
-        // Try biometric auth
-        final authNotifier = ref.read(authNotifierProvider.notifier);
-        final success = await authNotifier.signInWithBiometric();
-        if (success && mounted) {
-          _navigateToDashboard();
-          return;
-        }
-      }
-      // Go to dashboard (session still valid)
-      if (mounted) _navigateToDashboard();
-    } else {
-      // Not authenticated - go to role selection
-      if (mounted) context.go(RouteNames.roleSelection);
+    if (!mounted) return;
+
+    switch (result) {
+      case SessionRestoreResult.success:
+        print('[AUTH] Session restored - navigating to dashboard');
+        _navigateToDashboard();
+        break;
+      case SessionRestoreResult.biometricFailed:
+        print('[AUTH] Biometric authentication failed');
+        // Show error and go to login
+        context.go(RouteNames.roleSelection);
+        break;
+      case SessionRestoreResult.loginRequired:
+        print('[AUTH] Login required');
+        context.go(RouteNames.roleSelection);
+        break;
     }
   }
 

@@ -73,6 +73,8 @@ class DeviceService {
   /// Register current device for the logged-in user
   Future<RegisteredDevice> registerDevice({
     required bool biometricEnabled,
+    String? tokenFingerprint,
+    bool trusted = true,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -90,10 +92,15 @@ class DeviceService {
         'device_model': deviceInfo.deviceModel,
         'os_version': deviceInfo.osVersion,
         'biometric_enabled': biometricEnabled,
+        'trusted': trusted,
         'registered_at': DateTime.now().toIso8601String(),
         'last_used_at': DateTime.now().toIso8601String(),
         'revoked': false,
       };
+
+      if (tokenFingerprint != null) {
+        data['token_fingerprint'] = tokenFingerprint;
+      }
 
       final response = await _supabase
           .from('registered_devices')
@@ -307,6 +314,8 @@ class RegisteredDevice {
   final String? deviceModel;
   final String? osVersion;
   final bool biometricEnabled;
+  final bool trusted;
+  final String? tokenFingerprint;
   final DateTime registeredAt;
   final DateTime lastUsedAt;
   final bool revoked;
@@ -321,6 +330,8 @@ class RegisteredDevice {
     this.deviceModel,
     this.osVersion,
     required this.biometricEnabled,
+    required this.trusted,
+    this.tokenFingerprint,
     required this.registeredAt,
     required this.lastUsedAt,
     required this.revoked,
@@ -337,6 +348,8 @@ class RegisteredDevice {
       deviceModel: json['device_model'] as String?,
       osVersion: json['os_version'] as String?,
       biometricEnabled: json['biometric_enabled'] as bool? ?? false,
+      trusted: json['trusted'] as bool? ?? true,
+      tokenFingerprint: json['token_fingerprint'] as String?,
       registeredAt: DateTime.parse(json['registered_at'] as String),
       lastUsedAt: DateTime.parse(json['last_used_at'] as String),
       revoked: json['revoked'] as bool? ?? false,
@@ -356,6 +369,8 @@ class RegisteredDevice {
       'device_model': deviceModel,
       'os_version': osVersion,
       'biometric_enabled': biometricEnabled,
+      'trusted': trusted,
+      'token_fingerprint': tokenFingerprint,
       'registered_at': registeredAt.toIso8601String(),
       'last_used_at': lastUsedAt.toIso8601String(),
       'revoked': revoked,
