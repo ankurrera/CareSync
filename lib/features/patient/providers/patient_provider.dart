@@ -2,8 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../auth/providers/auth_provider.dart';
 import '../../../services/supabase_service.dart';
+import '../../../services/kyc_service.dart';
 import '../models/patient_data.dart';
 import '../models/prescription.dart';
+
+/// Provider to check if KYC is verified
+final isKycVerifiedProvider = FutureProvider<bool>((ref) async {
+  final kyc = await ref.watch(kycStatusProvider.future);
+  return kyc?.status == KYCStatus.verified;
+});
 
 /// Provider for current patient data - tied to auth state for proper invalidation
 final patientDataProvider = FutureProvider<PatientData?>((ref) async {
@@ -27,9 +34,15 @@ final patientPrescriptionsProvider =
   return data.map((json) => Prescription.fromJson(json)).toList();
 });
 
-/// Provider for medical conditions
+/// Provider for medical conditions - KYC verification required
 final medicalConditionsProvider =
     FutureProvider<List<MedicalCondition>>((ref) async {
+  // Check KYC status first
+  final isKycVerified = await ref.watch(isKycVerifiedProvider.future);
+  if (!isKycVerified) {
+    throw KYCRequiredException('KYC verification required to access medical records');
+  }
+
   final patientData = await ref.watch(patientDataProvider.future);
   if (patientData == null) return [];
 

@@ -105,17 +105,19 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           return;
         }
 
-        // Check if 2FA is required (new device)
+        // Handle different requirements based on sign-in result
         if (result.requiresTwoFactor && mounted) {
+          // New device - require 2FA
           await _show2FADialog(result);
+        } else if (result.requiresKyc && mounted) {
+          // KYC not verified - redirect to KYC
+          context.go(RouteNames.kycVerification);
+        } else if (result.requiresBiometric && mounted) {
+          // Biometric enrollment required - MANDATORY per spec
+          context.go(RouteNames.biometricEnrollment, extra: true);
         } else if (mounted) {
-          // Check if biometric is enabled, if not prompt for enrollment
-          final biometricEnabled = await ref.read(biometricEnabledProvider.future);
-          if (!biometricEnabled) {
-            context.go(RouteNames.biometricEnrollment);
-          } else {
-            _navigateToDashboard(profile.role);
-          }
+          // All requirements met - navigate to dashboard
+          _navigateToDashboard(profile.role);
         }
       }
     } catch (e) {

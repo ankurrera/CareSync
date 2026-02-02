@@ -285,3 +285,9 @@ class KYCException implements Exception {
   @override
   String toString() => message;
 }
+
+/// Exception thrown when KYC verification is required
+class KYCRequiredException extends KYCException {
+  KYCRequiredException([String? message]) 
+    : super(message ?? 'KYC verification required to access this feature');
+}

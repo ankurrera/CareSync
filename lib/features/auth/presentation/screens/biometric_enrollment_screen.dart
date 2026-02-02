@@ -5,10 +5,16 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
+import '../../../../services/kyc_service.dart';
 import '../../providers/auth_provider.dart';
 
 class BiometricEnrollmentScreen extends ConsumerStatefulWidget {
-  const BiometricEnrollmentScreen({super.key});
+  final bool isMandatory;
+  
+  const BiometricEnrollmentScreen({
+    super.key,
+    this.isMandatory = false,
+  });
 
   @override
   ConsumerState<BiometricEnrollmentScreen> createState() =>
@@ -27,10 +33,27 @@ class _BiometricEnrollmentScreenState
     });
 
     try {
+      // KYC check is handled in AuthController for mandatory enrollments
+      // For optional enrollments from profile, check KYC first
+      if (!widget.isMandatory) {
+        final kycStatus = await ref.read(kycStatusProvider.future);
+        if (kycStatus == null || kycStatus.status != KYCStatus.verified) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('KYC verification required before enabling biometric login'),
+                backgroundColor: AppColors.warning,
+              ),
+            );
+            context.push(RouteNames.kycVerification);
+          }
+          return;
+        }
+      }
+
       await ref.read(authNotifierProvider.notifier).enrollBiometric();
 
       if (mounted) {
-        // Show success and navigate
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Biometric login enabled successfully!'),
@@ -270,14 +293,17 @@ class _BiometricEnrollmentScreenState
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: TextButton(
-                          onPressed: _isLoading ? null : _skipBiometric,
-                          child: const Text('Skip for now'),
+                      // Only show skip button if not mandatory
+                      if (!widget.isMandatory) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: _isLoading ? null : _skipBiometric,
+                            child: const Text('Skip for now'),
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   );
                 },

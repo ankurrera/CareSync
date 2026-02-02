@@ -10,6 +10,7 @@ import '../../../services/kyc_service.dart';
 import '../../../services/two_factor_service.dart';
 import '../../../services/device_service.dart';
 import '../../../services/audit_service.dart';
+import '../../../services/auth_controller.dart';
 import '../../patient/providers/patient_provider.dart';
 import '../../shared/models/user_profile.dart';
 
@@ -85,6 +86,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   final _twoFactorService = TwoFactorService.instance;
   final _deviceService = DeviceService.instance;
   final _auditService = AuditService.instance;
+  final _authController = AuthController.instance;
 
   void _init() {
     state = AsyncValue.data(_supabase.currentUser);
@@ -143,6 +145,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }) async {
     state = const AsyncValue.loading();
     try {
+      print('[AUTH] Sign in attempt for: $email');
+      
       final response = await _supabase.signIn(
         email: email,
         password: password,
@@ -152,6 +156,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         throw Exception('Invalid credentials');
       }
 
+      print('[AUTH] Login success');
       final userId = response.user!.id;
 
       // Store tokens for session persistence
@@ -172,15 +177,65 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         return SignInResult(
           user: response.user,
           requiresTwoFactor: true,
+          requiresKyc: false,
+          requiresBiometric: false,
           email: email,
         );
+      }
+
+      // Device is registered - now check KYC and biometric requirements
+      print('[AUTH] Checking KYC status');
+      final kyc = await _kycService.getKYCStatus();
+      
+      if (kyc == null || kyc.status != KYCStatus.verified) {
+        print('[AUTH] KYC not verified');
+        state = AsyncValue.data(response.user);
+        return SignInResult(
+          user: response.user,
+          requiresTwoFactor: false,
+          requiresKyc: true,
+          requiresBiometric: false,
+        );
+      }
+
+      print('[AUTH] KYC verified');
+
+      // Check device biometric binding
+      final deviceId = await _storage.getDeviceId();
+      if (deviceId != null) {
+        final device = await _supabase.client
+            .from('registered_devices')
+            .select()
+            .eq('user_id', userId)
+            .eq('device_id', deviceId)
+            .maybeSingle();
+
+        // Check if device is revoked
+        if (device != null && device['revoked'] == true) {
+          print('[AUTH] Device revoked');
+          await _storage.clearSession();
+          throw Exception('Device has been revoked');
+        }
+
+        // Check if biometric needs to be enabled
+        if (device == null || device['biometric_enabled'] != true) {
+          print('[AUTH] Biometric required');
+          state = AsyncValue.data(response.user);
+          return SignInResult(
+            user: response.user,
+            requiresTwoFactor: false,
+            requiresKyc: false,
+            requiresBiometric: true,
+          );
+        }
+
+        print('[AUTH] Device trusted');
       }
 
       // Update device last used
       await _deviceService.updateDeviceLastUsed();
 
       // Log login
-      final deviceId = await _deviceService.getDeviceId();
       if (deviceId != null) {
         await _auditService.logLogin(deviceId: deviceId);
       }
@@ -189,6 +244,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       return SignInResult(
         user: response.user,
         requiresTwoFactor: false,
+        requiresKyc: false,
+        requiresBiometric: false,
       );
     } on AuthException catch (e, st) {
       // Map Supabase auth errors to friendlier messages
@@ -289,28 +346,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   /// Enroll biometrics for this device
   Future<void> enrollBiometric() async {
     try {
-      // First verify biometric works
-      final authenticated = await _biometric.authenticate(
-        reason: 'Set up biometric login for CareSync',
-      );
-
-      if (!authenticated) {
-        throw Exception('Biometric authentication failed');
-      }
-
-      // Register device with biometric enabled
-      await _deviceService.registerDevice(biometricEnabled: true);
-
-      // Enable biometric locally
-      await _storage.setBiometricEnabled(true);
-
-      // Store current session tokens for biometric quick-login
-      final session = _supabase.auth.currentSession;
-      if (session != null) {
-        await _storage.setAccessToken(session.accessToken);
-        await _storage.setRefreshToken(session.refreshToken ?? '');
-      }
-
+      await _authController.forceEnableBiometric();
+      
       // Log device registration
       final deviceInfo = await _deviceService.getDeviceInfo();
       await _auditService.logDeviceRegistration(
@@ -390,11 +427,15 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
 class SignInResult {
   final User? user;
   final bool requiresTwoFactor;
+  final bool requiresKyc;
+  final bool requiresBiometric;
   final String? email;
 
   SignInResult({
     this.user,
     required this.requiresTwoFactor,
+    required this.requiresKyc,
+    required this.requiresBiometric,
     this.email,
   });
 }

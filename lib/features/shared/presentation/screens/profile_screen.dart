@@ -10,6 +10,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/supabase_service.dart';
+import '../../../../services/kyc_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -417,6 +418,79 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               Card(
                 child: Column(
                   children: [
+                    // KYC Verification
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final kycStatus = ref.watch(kycStatusProvider);
+                        return kycStatus.when(
+                          data: (kyc) {
+                            final isVerified = kyc?.status == KYCStatus.verified;
+                            final isPending = kyc?.status == KYCStatus.pending;
+                            final isRejected = kyc?.status == KYCStatus.rejected;
+                            
+                            return ListTile(
+                              leading: Icon(
+                                isVerified 
+                                    ? Icons.verified_rounded 
+                                    : isPending
+                                        ? Icons.pending_rounded
+                                        : Icons.badge_rounded,
+                                color: isVerified 
+                                    ? AppColors.success 
+                                    : isPending
+                                        ? AppColors.warning
+                                        : AppColors.primary,
+                              ),
+                              title: const Text('Verify Identity (KYC)'),
+                              subtitle: kyc != null
+                                  ? Text(
+                                      isVerified 
+                                          ? 'Verified ✓' 
+                                          : isPending
+                                              ? 'Pending verification'
+                                              : isRejected
+                                                  ? 'Rejected - Please resubmit'
+                                                  : 'Not verified',
+                                      style: TextStyle(
+                                        color: isVerified 
+                                            ? AppColors.success 
+                                            : isPending
+                                                ? AppColors.warning
+                                                : AppColors.error,
+                                      ),
+                                    )
+                                  : const Text('Required for full access'),
+                              trailing: const Icon(Icons.chevron_right_rounded),
+                              onTap: () {
+                                context.push(RouteNames.kycVerification);
+                              },
+                            );
+                          },
+                          loading: () => const ListTile(
+                            leading: CircularProgressIndicator(),
+                            title: Text('Verify Identity (KYC)'),
+                          ),
+                          error: (_, __) => ListTile(
+                            leading: const Icon(Icons.badge_rounded),
+                            title: const Text('Verify Identity (KYC)'),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                            onTap: () {
+                              context.push(RouteNames.kycVerification);
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.devices_rounded),
+                      title: const Text('Manage Devices'),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {
+                        context.push(RouteNames.deviceManagement);
+                      },
+                    ),
+                    const Divider(height: 1),
                     ListTile(
                       leading: const Icon(Icons.fingerprint_rounded),
                       title: const Text('Biometric Settings'),
