@@ -25,6 +25,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isBiometricLoading = false;
 
   @override
   void dispose() {
@@ -129,6 +130,81 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signInWithBiometric() async {
+    setState(() => _isBiometricLoading = true);
+
+    try {
+      // Attempt biometric authentication
+      final success = await ref.read(authNotifierProvider.notifier).signInWithBiometric();
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Biometric authentication failed or session expired. Please sign in with your credentials.'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        // Refresh profile to get user data
+        ref.invalidate(currentProfileProvider);
+        final profile = await ref.read(currentProfileProvider.future);
+
+        if (profile == null) {
+          throw Exception('Could not load profile');
+        }
+
+        // Validate role matches
+        if (profile.role != widget.role) {
+          // Sign out first
+          await ref.read(authNotifierProvider.notifier).signOut();
+
+          if (mounted) {
+            // Show a dialog with the correct role info
+            await _showRoleMismatchDialog(profile.role);
+          }
+          return;
+        }
+
+        // Navigate to dashboard
+        _navigateToDashboard(profile.role);
+      }
+    } catch (e) {
+      if (mounted) {
+        String errorMessage = 'Biometric authentication failed. Please try again or sign in with your credentials.';
+        
+        // Handle specific error cases
+        final errorStr = e.toString();
+        if (errorStr.contains('session expired') || errorStr.contains('timed out')) {
+          errorMessage = 'Session expired. Please sign in with your credentials.';
+        } else if (errorStr.contains('canceled')) {
+          errorMessage = 'Authentication canceled. Please try again or sign in with your credentials.';
+        } else if (errorStr.contains('not enrolled')) {
+          errorMessage = 'No biometrics enrolled. Please set up biometric authentication in your device settings.';
+        } else if (errorStr.contains('not available')) {
+          errorMessage = 'Biometric authentication is not available on this device.';
+        } else if (errorStr.contains('locked')) {
+          errorMessage = 'Too many failed attempts. Please try again later or sign in with your credentials.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBiometricLoading = false);
     }
   }
 
@@ -520,6 +596,92 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                           )
                         : const Text('Sign In'),
                   ),
+                ),
+                const SizedBox(height: 24),
+                // Biometric login section
+                Consumer(
+                  builder: (context, ref, child) {
+                    final biometricAvailable = ref.watch(biometricAvailableProvider);
+                    final biometricEnabled = ref.watch(biometricEnabledProvider);
+                    final biometricTypeName = ref.watch(biometricTypeNameProvider);
+
+                    // Only show if both conditions are met
+                    final shouldShow = (biometricAvailable.valueOrNull ?? false) &&
+                                       (biometricEnabled.valueOrNull ?? false);
+
+                    if (!shouldShow) return const SizedBox.shrink();
+
+                    final typeName = biometricTypeName.valueOrNull ?? 'Biometric';
+                    final isFaceId = typeName.toLowerCase().contains('face');
+
+                    return Column(
+                      children: [
+                        // Divider with "OR"
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Divider(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.2),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                'OR',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withOpacity(0.5),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Divider(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.2),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        // Biometric button
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: (_isBiometricLoading || _isLoading) ? null : _signInWithBiometric,
+                            icon: _isBiometricLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    isFaceId ? Icons.face_rounded : Icons.fingerprint_rounded,
+                                    size: 24,
+                                  ),
+                            label: Text('Sign in with $typeName'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: BorderSide(
+                                color: _roleColor.withOpacity(0.5),
+                                width: 2,
+                              ),
+                              foregroundColor: _roleColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
                 // Sign up link
