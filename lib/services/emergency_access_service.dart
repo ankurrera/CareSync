@@ -55,7 +55,7 @@ class EmergencyAccessService {
 
     final authenticated = await _biometric.authenticate(
       reason: 'Authenticate for emergency "break glass" access',
-      biometricOnly: false,
+      biometricOnly: true,
     );
 
     if (!authenticated) {
@@ -324,11 +324,4 @@ class EmergencyAccessException implements Exception {
 
   @override
   String toString() => message;
-}
-
-/// Add new audit action types
-extension EmergencyAuditActions on AuditAction {
-  static const emergencyAccessGranted = AuditAction.values.length;
-  static const emergencyAccessRevoked = AuditAction.values.length + 1;
-  static const patientNotified = AuditAction.values.length + 2;
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -164,13 +165,11 @@ class EncryptionService {
   /// Generate random key of specified length
   Uint8List _generateRandomKey(int length) {
     // Use crypto-secure random generation
-    final random = DateTime.now().millisecondsSinceEpoch;
+    final random = Random.secure();
     final key = Uint8List(length);
     
     for (int i = 0; i < length; i++) {
-      // Simple pseudo-random generation for demo
-      // In production, use a proper CSPRNG
-      key[i] = ((random * (i + 1)) % 256);
+      key[i] = random.nextInt(256);
     }
     
     return key;

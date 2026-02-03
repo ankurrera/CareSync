@@ -84,12 +84,20 @@ WITH CHECK (auth.uid() = requester_id);
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- Add metadata column to prescriptions table for biometric verification
-ALTER TABLE prescriptions 
-ADD COLUMN IF NOT EXISTS metadata JSONB;
+-- This requires that the prescriptions table already exists from the main schema
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'prescriptions') THEN
+    ALTER TABLE prescriptions 
+    ADD COLUMN IF NOT EXISTS metadata JSONB;
 
--- Create index on metadata for efficient queries
-CREATE INDEX IF NOT EXISTS idx_prescriptions_metadata 
-ON prescriptions USING gin(metadata);
+    -- Create index on metadata for efficient queries
+    CREATE INDEX IF NOT EXISTS idx_prescriptions_metadata 
+    ON prescriptions USING gin(metadata);
+  ELSE
+    RAISE NOTICE 'prescriptions table does not exist. Please run main schema first.';
+  END IF;
+END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- HELPER FUNCTIONS

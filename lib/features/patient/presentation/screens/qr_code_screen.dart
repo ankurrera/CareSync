@@ -94,37 +94,27 @@ class _QrCodeScreenState extends ConsumerState<QrCodeScreen> {
   }
 
   void _enableScreenshotProtection() {
-    // Screenshot protection only works on Android
+    // Screenshot protection only works on Android with native implementation
+    // This is a placeholder that sets a flag but does NOT actually enable protection
+    // In production, you MUST integrate flutter_windowmanager natively:
+    // await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
     if (Platform.isAndroid) {
-      try {
-        // Use flutter_windowmanager if available
-        // Note: This requires native implementation
-        // For now, we'll just track the state
-        setState(() => _screenshotProtectionEnabled = true);
-        
-        // In a real implementation, you would call:
-        // await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
-      } catch (e) {
-        assert(() {
-          print('[QR] Screenshot protection not available: $e');
-          return true;
-        }());
-      }
+      setState(() => _screenshotProtectionEnabled = true);
+      
+      // TODO: Implement actual screenshot protection
+      // Requires adding flutter_windowmanager native integration
+      assert(() {
+        print('[QR] Screenshot protection placeholder - NOT ACTUALLY PROTECTED');
+        return true;
+      }());
     }
   }
 
   void _disableScreenshotProtection() {
+    // In production, implement actual screenshot protection disable:
+    // await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
     if (_screenshotProtectionEnabled && Platform.isAndroid) {
-      try {
-        // In a real implementation, you would call:
-        // await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
-        _screenshotProtectionEnabled = false;
-      } catch (e) {
-        assert(() {
-          print('[QR] Error disabling screenshot protection: $e');
-          return true;
-        }());
-      }
+      _screenshotProtectionEnabled = false;
     }
   }
 
