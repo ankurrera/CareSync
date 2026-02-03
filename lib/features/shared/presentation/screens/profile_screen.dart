@@ -11,6 +11,8 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../routing/route_names.dart';
 import '../../../../services/supabase_service.dart';
 import '../../../../services/kyc_service.dart';
+import '../../../../services/biometric_service.dart';
+import '../../../../services/secure_storage_service.dart';
 import '../../../auth/providers/auth_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -28,11 +30,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _isUploading = false;
   String? _avatarUrl;
   File? _selectedImage;
+  bool _biometricEnabled = false;
+  bool _biometricAvailable = false;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _loadBiometricSettings();
   }
 
   @override
@@ -50,6 +55,74 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       setState(() {
         _avatarUrl = profile.avatarUrl;
       });
+    }
+  }
+
+  Future<void> _loadBiometricSettings() async {
+    final enabled = await SecureStorageService.instance.isBiometricEnabled();
+    final available = await BiometricService.instance.isBiometricAvailable();
+    
+    setState(() {
+      _biometricEnabled = enabled;
+      _biometricAvailable = available;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (!_biometricAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Biometric authentication is not available on this device'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    if (value) {
+      // Enable biometric - require authentication first
+      try {
+        final authenticated = await BiometricService.instance.authenticate(
+          reason: 'Authenticate to enable biometric login',
+          biometricOnly: false,
+        );
+
+        if (authenticated) {
+          await SecureStorageService.instance.setBiometricEnabled(true);
+          setState(() => _biometricEnabled = true);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Biometric authentication enabled'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          }
+        }
+      } on BiometricException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } else {
+      // Disable biometric
+      await SecureStorageService.instance.setBiometricEnabled(false);
+      setState(() => _biometricEnabled = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric authentication disabled'),
+            backgroundColor: AppColors.info,
+          ),
+        );
+      }
     }
   }
 
@@ -492,12 +565,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                     const Divider(height: 1),
                     ListTile(
-                      leading: const Icon(Icons.fingerprint_rounded),
-                      title: const Text('Biometric Settings'),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () {
-                        context.push(RouteNames.biometricEnrollment);
-                      },
+                      leading: Icon(
+                        Icons.fingerprint_rounded,
+                        color: _biometricAvailable ? AppColors.primary : Colors.grey,
+                      ),
+                      title: const Text('Biometric Authentication'),
+                      subtitle: Text(
+                        _biometricAvailable
+                            ? _biometricEnabled
+                                ? 'Enabled'
+                                : 'Disabled'
+                            : 'Not available on this device',
+                        style: TextStyle(
+                          color: _biometricAvailable
+                              ? _biometricEnabled
+                                  ? AppColors.success
+                                  : Colors.grey
+                              : AppColors.error,
+                        ),
+                      ),
+                      trailing: Switch(
+                        value: _biometricEnabled,
+                        onChanged: _biometricAvailable ? _toggleBiometric : null,
+                        activeColor: AppColors.primary,
+                      ),
                     ),
                     const Divider(height: 1),
                     ListTile(

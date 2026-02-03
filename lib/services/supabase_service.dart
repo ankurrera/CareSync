@@ -199,6 +199,7 @@ class SupabaseService {
     bool isPublic = false,
     bool patientEntered = false,
     required List<Map<String, dynamic>> items,
+    Map<String, dynamic>? metadata,
   }) async {
     // Create prescription
     final prescription = await client
@@ -210,6 +211,7 @@ class SupabaseService {
           'notes': notes,
           'is_public': isPublic,
           'patient_entered': patientEntered,
+          'metadata': metadata,
         })
         .select()
         .single();
