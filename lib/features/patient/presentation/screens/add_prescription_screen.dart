@@ -13,7 +13,26 @@ import '../widgets/prescription_upload_widget.dart';
 import '../../../../services/supabase_service.dart';
 
 /// Comprehensive Add Prescription screen for patient input
-/// Implements all requirements from the problem statement
+/// 
+/// 🔒 LAYOUT ARCHITECTURE - CRITICAL
+/// This screen uses CustomScrollView with slivers to prevent layout constraint errors.
+/// 
+/// ❌ PREVIOUS ISSUES (FIXED):
+/// - Nested scrollables (ListView inside SingleChildScrollView)
+/// - Unbounded height constraints
+/// - "RenderBox was not laid out" errors
+/// 
+/// ✅ CURRENT SOLUTION:
+/// - ONE scrollable: CustomScrollView
+/// - Static sections: SliverToBoxAdapter / SliverList with SliverChildListDelegate
+/// - Dynamic medications: SliverList with SliverChildBuilderDelegate
+/// - NO nested ListViews, NO Expanded inside scroll views
+/// 
+/// This architecture ensures:
+/// 1. Constraint-safe scrolling with any number of medications
+/// 2. No render overflow errors
+/// 3. Smooth, unified scroll experience
+/// 4. Proper form state management across slivers
 class AddPrescriptionScreen extends ConsumerStatefulWidget {
   const AddPrescriptionScreen({super.key});
 
@@ -267,78 +286,128 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     final patient = ref.watch(patientDataProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Add Prescription'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
       body: patient.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (_) => Form(
           key: _formKey,
-          child: ListView(
-            padding: AppSpacing.screenPadding,
-            children: [
-              // Info banner
-              _buildInfoBanner(),
-              const SizedBox(height: AppSpacing.lg),
-
-              // 1️⃣ Prescription Metadata Section
-              _buildSectionHeader('Prescription Details'),
-              const SizedBox(height: AppSpacing.sm),
-              _buildMetadataSection(),
-              const SizedBox(height: AppSpacing.lg),
-
-              // 2️⃣ Patient Card (Read-only)
-              _buildSectionHeader('Patient Information'),
-              const SizedBox(height: AppSpacing.sm),
-              _buildPatientCard(profile),
-              const SizedBox(height: AppSpacing.lg),
-
-              // 3️⃣ Doctor / Issuer Section
-              _buildSectionHeader('Doctor / Issuer Details'),
-              const SizedBox(height: AppSpacing.sm),
-              DoctorInfoCardWidget(
-                onChanged: (details) {
-                  setState(() => _doctorDetails = details);
-                },
+          child: CustomScrollView(
+            slivers: [
+              // SliverAppBar replaces AppBar for scroll-integrated header
+              SliverAppBar(
+                title: const Text('Add Prescription'),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                floating: true,
+                snap: true,
               ),
-              const SizedBox(height: AppSpacing.lg),
 
-              // 4️⃣ Prescription Upload Section
-              _buildSectionHeader('Prescription Upload'),
-              const SizedBox(height: AppSpacing.sm),
-              PrescriptionUploadWidget(
-                onChanged: (upload) {
-                  setState(() => _prescriptionUpload = upload);
-                },
+              // Padding wrapper for all content
+              SliverPadding(
+                padding: AppSpacing.screenPadding,
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // Info banner
+                    _buildInfoBanner(),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // 1️⃣ Prescription Metadata Section
+                    _buildSectionHeader('Prescription Details'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMetadataSection(),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // 2️⃣ Patient Card (Read-only)
+                    _buildSectionHeader('Patient Information'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildPatientCard(profile),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // 3️⃣ Doctor / Issuer Section
+                    _buildSectionHeader('Doctor / Issuer Details'),
+                    const SizedBox(height: AppSpacing.sm),
+                    DoctorInfoCardWidget(
+                      onChanged: (details) {
+                        setState(() => _doctorDetails = details);
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // 4️⃣ Prescription Upload Section
+                    _buildSectionHeader('Prescription Upload'),
+                    const SizedBox(height: AppSpacing.sm),
+                    PrescriptionUploadWidget(
+                      onChanged: (upload) {
+                        setState(() => _prescriptionUpload = upload);
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // 5️⃣ Diagnosis & Notes
+                    _buildSectionHeader('Diagnosis & Notes'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildDiagnosisSection(),
+                    const SizedBox(height: AppSpacing.lg),
+
+                    // 6️⃣ Medications Section Header and Add Button
+                    _buildSectionHeader('Medications'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMedicationsHeader(),
+                    const SizedBox(height: AppSpacing.md),
+                  ]),
+                ),
               ),
-              const SizedBox(height: AppSpacing.lg),
 
-              // 5️⃣ Diagnosis & Notes
-              _buildSectionHeader('Diagnosis & Notes'),
-              const SizedBox(height: AppSpacing.sm),
-              _buildDiagnosisSection(),
-              const SizedBox(height: AppSpacing.lg),
-
-              // 6️⃣ Medications Section
-              _buildSectionHeader('Medications'),
-              const SizedBox(height: AppSpacing.sm),
-              _buildMedicationsSection(),
-              const SizedBox(height: AppSpacing.lg),
+              // 6️⃣ Medications List - CRITICAL: Using SliverList to avoid nested scroll issues
+              // This prevents "RenderBox was not laid out" errors by using proper sliver architecture
+              _medications.isEmpty
+                  ? SliverPadding(
+                      padding: AppSpacing.screenPadding,
+                      sliver: SliverToBoxAdapter(
+                        child: _buildEmptyMedicationsState(),
+                      ),
+                    )
+                  : SliverPadding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.screenPadding.left,
+                      ),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            // Each medication card as individual sliver child
+                            // NO Expanded, NO Flexible - just direct widget return
+                            return MedicationCardWidget(
+                              key: ValueKey(_medications[index].id),
+                              index: index,
+                              initialData: _medications[index],
+                              onChanged: (details) => _updateMedication(index, details),
+                              onRemove: () => _removeMedication(index),
+                            );
+                          },
+                          childCount: _medications.length,
+                        ),
+                      ),
+                    ),
 
               // 7️⃣ Safety Flags
-              _buildSectionHeader('Safety Information'),
-              const SizedBox(height: AppSpacing.sm),
-              _buildSafetyFlags(),
-              const SizedBox(height: AppSpacing.lg),
+              SliverPadding(
+                padding: AppSpacing.screenPadding,
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    const SizedBox(height: AppSpacing.lg),
+                    _buildSectionHeader('Safety Information'),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildSafetyFlags(),
+                    const SizedBox(height: AppSpacing.lg),
 
-              // 8️⃣ Declaration & Submission
-              _buildDeclaration(),
-              const SizedBox(height: AppSpacing.md),
-              _buildSubmitButton(),
-              const SizedBox(height: AppSpacing.xl),
+                    // 8️⃣ Declaration & Submission
+                    _buildDeclaration(),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildSubmitButton(),
+                    const SizedBox(height: AppSpacing.xl),
+                  ]),
+                ),
+              ),
             ],
           ),
         ),
@@ -576,84 +645,72 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
     );
   }
 
-  Widget _buildMedicationsSection() {
-    return Column(
+  /// Builds the medications header with add button
+  /// Separated from list to work with sliver architecture
+  Widget _buildMedicationsHeader() {
+    return Row(
       children: [
-        // Add Medication Button
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'At least one medication required',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+        const Expanded(
+          child: Text(
+            'At least one medication required',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
             ),
-            SizedBox(
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: _addMedication,
-                icon: const Icon(Icons.add_rounded, size: 20),
-                label: const Text('Add Medication'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.pharmacist,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: AppSpacing.md),
-
-        // Empty state or medication cards
-        if (_medications.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
-              ),
+        SizedBox(
+          height: 40,
+          child: ElevatedButton.icon(
+            onPressed: _addMedication,
+            icon: const Icon(Icons.add_rounded, size: 20),
+            label: const Text('Add Medication'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.pharmacist,
+              foregroundColor: Colors.white,
             ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.medication_outlined,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  'No medications added',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Tap "Add Medication" to begin',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          ...List.generate(_medications.length, (index) {
-            return MedicationCardWidget(
-              key: ValueKey(_medications[index].id),
-              index: index,
-              initialData: _medications[index],
-              onChanged: (details) => _updateMedication(index, details),
-              onRemove: () => _removeMedication(index),
-            );
-          }),
+          ),
+        ),
       ],
+    );
+  }
+
+  /// Builds empty state when no medications added
+  /// Used as SliverToBoxAdapter child
+  Widget _buildEmptyMedicationsState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.medication_outlined,
+            size: 48,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'No medications added',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tap "Add Medication" to begin',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
