@@ -64,6 +64,7 @@ abstract class AppColors {
   static const Color borderLight = Color(0xFFE2E8F0);       // Slate 200
   static const Color textPrimaryLight = Color(0xFF0F172A);  // Slate 900
   static const Color textSecondaryLight = Color(0xFF64748B);// Slate 500
+  static const Color textSecondary = Color(0xFF64748B);     // Alias for textSecondaryLight
 
   // ─────────────────────────────────────────────────────────────────────────
   // DARK THEME COLORS
