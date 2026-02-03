@@ -10,7 +10,7 @@ import '../features/auth/presentation/screens/kyc_verification_screen.dart';
 import '../features/auth/presentation/screens/device_management_screen.dart';
 import '../features/auth/providers/auth_provider.dart';
 import '../features/patient/presentation/screens/patient_dashboard_screen.dart';
-import '../features/patient/presentation/screens/patient_new_prescription_screen.dart';
+import '../features/patient/presentation/screens/add_prescription_screen.dart';
 import '../features/patient/presentation/screens/prescriptions_screen.dart';
 import '../features/patient/presentation/screens/qr_code_screen.dart';
 import '../features/patient/presentation/screens/medical_history_screen.dart';
@@ -159,7 +159,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.patientNewPrescription,
         name: 'patientNewPrescription',
-        builder: (context, state) => const PatientNewPrescriptionScreen(),
+        builder: (context, state) => const AddPrescriptionScreen(),
       ),
       GoRoute(
         path: RouteNames.patientQrCode,
