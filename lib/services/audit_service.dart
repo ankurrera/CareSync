@@ -215,7 +215,10 @@ enum AuditAction {
   twoFactorSent,
   twoFactorVerified,
   passwordChanged,
-  profileUpdated;
+  profileUpdated,
+  emergencyAccessGranted,
+  emergencyAccessRevoked,
+  patientNotified;
 
   static AuditAction fromString(String action) {
     return AuditAction.values.firstWhere(
@@ -320,6 +323,12 @@ class AuditLog {
         return 'Changed password';
       case AuditAction.profileUpdated:
         return 'Updated profile';
+      case AuditAction.emergencyAccessGranted:
+        return 'Emergency access granted';
+      case AuditAction.emergencyAccessRevoked:
+        return 'Emergency access revoked';
+      case AuditAction.patientNotified:
+        return 'Patient notified';
     }
   }
 

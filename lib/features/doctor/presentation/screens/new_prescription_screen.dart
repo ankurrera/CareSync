@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/biometric_guard.dart';
 import '../../../../services/supabase_service.dart';
+import '../../../../services/audit_service.dart';
 
 class NewPrescriptionScreen extends ConsumerStatefulWidget {
   final String patientId;
@@ -66,10 +68,29 @@ class _NewPrescriptionScreenState
       return;
     }
 
+    // Require biometric authentication before submitting prescription
+    final authenticated = await showBiometricAuthDialog(
+      context: context,
+      reason: 'Authenticate to sign and submit prescription',
+      allowBiometricOnly: false,
+    );
+
+    if (!authenticated) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Biometric authentication required to submit prescription'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      // Create prescription
+      // Create prescription with biometric verification metadata
       await SupabaseService.instance.createPrescription(
         patientId: widget.patientId,
         diagnosis: _diagnosisController.text.trim(),
@@ -78,12 +99,28 @@ class _NewPrescriptionScreenState
             : null,
         isPublic: _isPublic,
         items: _medications.map((med) => med.toJson()).toList(),
+        // Add metadata for biometric verification
+        metadata: {
+          'biometric_verified': true,
+          'signed_at': DateTime.now().toIso8601String(),
+        },
+      );
+
+      // Log the action in audit trail
+      await AuditService.instance.logAction(
+        action: AuditAction.createPrescription,
+        resourceType: 'prescription',
+        metadata: {
+          'patient_id': widget.patientId,
+          'biometric_verified': true,
+          'signed_at': DateTime.now().toIso8601String(),
+        },
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Prescription created successfully'),
+            content: Text('Prescription created and signed successfully'),
             backgroundColor: AppColors.success,
           ),
         );
