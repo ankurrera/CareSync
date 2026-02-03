@@ -591,13 +591,16 @@ class _AddPrescriptionScreenState extends ConsumerState<AddPrescriptionScreen> {
                 ),
               ),
             ),
-            ElevatedButton.icon(
-              onPressed: _addMedication,
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text('Add Medication'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.pharmacist,
-                foregroundColor: Colors.white,
+            SizedBox(
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: _addMedication,
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: const Text('Add Medication'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.pharmacist,
+                  foregroundColor: Colors.white,
+                ),
               ),
             ),
           ],
